@@ -84,7 +84,7 @@ class Crawler:
             await self.utxos.update_one({'_id':_id},
                     {'$set':{'spent_txid':txid,'spent_height':height}},upsert=True)
         except Exception as e:
-            logger.error('Update a vin %s:%s' % (_id,e))
+            logger.error('Unable to update a vin %s:%s' % (_id,e))
             sys.exit(1)
 
     async def update_a_vout(self, vout, txid, height):
@@ -104,7 +104,7 @@ class Crawler:
         try:
             await self.utxos.update_one({'_id':_id}, {'$set':ud}, upsert=True)
         except Exception as e:
-            logger.error('-----Error update a vout %s:%s' % (_id,e))
+            logger.error('Unable to update a vout %s:%s' % (_id,e))
             sys.exit(1)
 
     async def update_a_claim(self, claim, txid, height):
@@ -113,7 +113,7 @@ class Crawler:
             await self.utxos.update_one({'_id':_id},
                     {'$set':{'claim_height':height,'claim_txid':txid}}, upsert=True)
         except Exception as e:
-            logger.error('-----Error update a claim %s:%s' % (_id,e))
+            logger.error('Unable to update a claim %s:%s' % (_id,e))
             sys.exit(1)
 
     async def update_block(self, block):
