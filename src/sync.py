@@ -169,7 +169,7 @@ class Crawler:
                     await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
 
                 time_b = now()
-                logger.info('Synced %s ,cost %.6f s to sync %s blocks ,total cost: %.6f s' % 
+                logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
                 await asyncio.wait([self.update_block(block) for block in self.cache.values()])
                 await self.update_state(max_height)
