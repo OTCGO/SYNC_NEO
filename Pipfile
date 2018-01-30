@@ -12,6 +12,7 @@ aiohttp = "*"
 uvloop = "*"
 python-dotenv = "*"
 logzero = "*"
+pymongo = "*"
 
 
 [dev-packages]
