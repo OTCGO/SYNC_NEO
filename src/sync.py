@@ -75,6 +75,16 @@ class Crawler:
         else:
             return result['value']
 
+    async def get_total_sys_fee(self, height):
+        if -1 == height: return 0
+        result = await self.blocks.find_one({'_id': height})
+        if not result:
+            msg = 'Unable to fetch block(height=%s)'.format(height)
+            logger.error(msg)
+            raise Exception(msg)
+            sys.exit(1)
+        return result['total_sys_fee']
+
     async def update_state(self, height):
         await self.state.update_one({'_id':'height'}, {'$set': {'value':height}}, upsert=True)
 
@@ -117,11 +127,9 @@ class Crawler:
             sys.exit(1)
 
     async def update_block(self, block):
-        block['sys_fee'] = 0
-        for tx in block['tx']:
-            block['sys_fee'] += int(tx['sys_fee'])
         _id = block['index']
         ud = {'sys_fee':block['sys_fee'],
+                'total_sys_fee':block['total_sys_fee'],
                 'time':block['time'],
                 'hash':block['hash'],
                 'txs':[tx['txid'] for tx in block['tx']],
@@ -130,6 +138,17 @@ class Crawler:
 
     async def cache_block(self, height):
         self.cache[height] = await self.get_block(height)
+
+    async def update_sys_fee(self, min_height):
+        base_sys_fee = await self.get_total_sys_fee(min_height - 1)
+        for h in self.processing:
+            block = self.cache[h]
+            block['sys_fee'] = 0
+            block['total_sys_fee'] = base_sys_fee
+            for tx in block['tx']:
+                block['sys_fee'] += int(tx['sys_fee'])
+            block['total_sys_fee'] += block['sys_fee']
+            base_sys_fee = block['total_sys_fee']
 
     async def crawl(self):
         self.start = await self.get_state()
@@ -144,9 +163,14 @@ class Crawler:
                     stop = current_height
                 self.processing.extend([i for i in range(self.start,stop)])
                 max_height = max(self.processing)
+                min_height = self.processing[0]
                 await asyncio.wait([self.cache_block(h) for h in self.processing])
                 if self.processing != sorted(self.cache.keys()):
-                    raise Exception('cache != processing')
+                    msg = 'cache != processing'
+                    logger.error(msg)
+                    raise Exception(msg)
+                    sys.exit(1)
+                await self.update_sys_fee(min_height)
                 vins = []
                 vouts = []
                 claims = []
