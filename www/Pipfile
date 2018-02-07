@@ -1,0 +1,27 @@
+[[source]]
+
+url = "https://pypi.douban.com/simple"
+verify_ssl = true
+name = "pypi"
+
+
+[packages]
+
+aiohttp = "*"
+motor = "*"
+uvloop = "*"
+pycoin = "*"
+"base58" = "*"
+bitcoin = "*"
+ecdsa = "*"
+python-dotenv = "*"
+
+
+[dev-packages]
+
+ipython = "*"
+
+
+[requires]
+
+python_version = "3.6"
