@@ -2,6 +2,7 @@ import asyncio
 from coreweb import get, post
 from aiohttp import web
 from decimal import Decimal as D
+from pymongo import DESCENDING
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str
 from assets import NEO,NEP5, validate_asset, get_asset_decimal
@@ -130,6 +131,19 @@ async def claim(net, address, request):
     r = await request.app['db'].state.find_one({'_id':'height'})
     height = r['value'] + 1
     return await Tool.compute_gas(height, raw_utxo, request.app['db'])
+
+@get('/{net}/history/{address}')
+async def history(net, address, request, **kw):
+    if not valid_net(net): return {'error':'wrong net'}
+    if not Tool.validate_address(address): return {'error':'wrong address'}
+    raw_utxo = []
+    cursor = request.app['db'].history.find({'address':address}).sort('time', DESCENDING)
+    for document in await cursor.to_list(length=100):
+        del document['_id']
+        del document['address']
+        raw_utxo.append(document)
+    return {'result':raw_utxo}
+
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):

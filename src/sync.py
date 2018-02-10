@@ -146,7 +146,7 @@ class Crawler:
             block['sys_fee'] = 0
             block['total_sys_fee'] = base_sys_fee
             for tx in block['tx']:
-                block['sys_fee'] += int(tx['sys_fee'])
+                block['sys_fee'] += int(float(tx['sys_fee']))
             block['total_sys_fee'] += block['sys_fee']
             base_sys_fee = block['total_sys_fee']
 

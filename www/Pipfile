@@ -15,6 +15,7 @@ pycoin = "*"
 bitcoin = "*"
 ecdsa = "*"
 python-dotenv = "*"
+pymongo = "*"
 
 
 [dev-packages]

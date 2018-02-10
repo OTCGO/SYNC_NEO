@@ -179,9 +179,17 @@ class Crawler:
                 for block in self.cache.values():
                     block_time = self.timestamp_to_utc(block['time'])
                     for tx in block['tx']:
-                        for i in range(len(tx['vin'])):
-                            vin = tx['vin'][i]
+                        utxo_dict = {}
+                        for vin in tx['vin']:
                             utxo = self.cache_utxo[vin['txid']][vin['vout']]
+                            key = utxo['asset'] + '_' + utxo['address']
+                            if key in utxo_dict.keys():
+                                utxo_dict[key]['value'] = sci_to_str(str(D(utxo_dict[key]['value'])+D(utxo['value'])))
+                            else:
+                                utxo_dict[key] = utxo
+                        utxos = list(utxo_dict.values())
+                        for i in range(len(utxos)):
+                            utxo = utxos[i]
                             for j in range(len(tx['vout'])):
                                 vout = tx['vout'][j]
                                 if vout['asset']==utxo['asset'] and vout['address']==utxo['address']:
