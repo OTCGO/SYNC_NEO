@@ -62,12 +62,18 @@ async def response_factory(app, handler):
                 return web.HTTPFound(r[9:])
             resp = web.Response(body=r.encode('utf-8'))
             resp.content_type = 'text/html;charset=utf-8'
+            resp.headers["access-control-allow-origin"] = "*"
+            resp.headers["Access-Control-Allow-Headers"] = "x-requested-with"
+            resp.headers['Access-Control-Allow-Methods'] = 'POST, GET'
             return resp
         if isinstance(r, dict):
             template = r.get('__template__')
             if template is None:
                 resp = web.Response(body=json.dumps(r, ensure_ascii=False, default=lambda o:o.__dict__).encode('utf-8'))
                 resp.content_type = 'Application/json;charset=utf-8'
+                resp.headers["access-control-allow-origin"] = "*"
+                resp.headers["Access-Control-Allow-Headers"] = "x-requested-with"
+                resp.headers['Access-Control-Allow-Methods'] = 'POST, GET'
                 return resp
             else:
                 resp = web.Response(body=app['__templating__'].get_template(template).render(**r).encode('utf-8'))
