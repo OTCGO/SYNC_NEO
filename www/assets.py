@@ -2,16 +2,18 @@
 NEO = '0xc56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b'
 NEP5 = {
         'ecc6b20d3ccac1ee9ef109af5a7cdb85706b1df9':'RPX',
-        'b951ecbbc5fe37a9c280a76cb0ce0014827294cf':'DBC',
-        'a0777c3ce2b169d4a23bcba4565e3225a0122d95':'APH',
         '0d821bd7b6d53f5c2b40e217c6defc8bbe896cf5':'QLC',
-        '546c5872a992b2754ef327154f4c119baabff65f':'BCS',
-        '08e8c4400f1af2c20c28e0018f29535eb85d15b6':'TNC',
-        '7f86d61ff377f1b12e589a5907152b57e2ad9a7a':'ACAT',
-        '2328008e6f6c7bd157a342e789389eb034d9cbc4':'RHT',
+        'a0777c3ce2b169d4a23bcba4565e3225a0122d95':'APH',
+        'b951ecbbc5fe37a9c280a76cb0ce0014827294cf':'DBC',
         'ac116d4b8d4ca55e6b6d4ecce2192039b51cccc5':'ZPT',
+        '08e8c4400f1af2c20c28e0018f29535eb85d15b6':'TNC',
+        '2328008e6f6c7bd157a342e789389eb034d9cbc4':'RHT',
+        '7f86d61ff377f1b12e589a5907152b57e2ad9a7a':'ACAT',
+        '546c5872a992b2754ef327154f4c119baabff65f':'BCS',
         '132947096727c84c7f9e076c90f08fec3bc17f18':'TKY',
         '45d493a6f73fa5f404244a5fb8472fc014ca5885':'CPX',
+        '2e25d2127e0240c6deaf35394702feb236d4d7fc':'NRV',
+        '34579e4614ac1a7bd295372d3de8621770c76cdc':'CGE',
         }
 GLOBAL = {
         'c56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b':'GoverningToken',#NEO
