@@ -63,7 +63,7 @@ async def response_factory(app, handler):
             resp = web.Response(body=r.encode('utf-8'))
             resp.content_type = 'text/html;charset=utf-8'
             resp.headers["access-control-allow-origin"] = "*"
-            resp.headers["Access-Control-Allow-Headers"] = "x-requested-with"
+            resp.headers["Access-Control-Allow-Headers"] = "content-type, x-requested-with"
             resp.headers['Access-Control-Allow-Methods'] = 'POST, GET'
             return resp
         if isinstance(r, dict):

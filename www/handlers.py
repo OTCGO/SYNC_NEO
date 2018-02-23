@@ -1,5 +1,5 @@
 import asyncio
-from coreweb import get, post
+from coreweb import get, post, options
 from aiohttp import web
 from decimal import Decimal as D
 from pymongo import DESCENDING
@@ -219,3 +219,15 @@ async def broadcast(net, request, *, publicKey, signature, transaction):
         return {'result':True, 'txid':txid}
     return {'result':False, 'error':msg}
 
+@options('/{net}/transfer')
+async def transfer_options(net):
+    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    return 'OK'
+@options('/{net}/gas')
+async def gas_options(net):
+    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    return 'OK'
+@options('/{net}/broadcast')
+async def broadcast_options(net):
+    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    return 'OK'

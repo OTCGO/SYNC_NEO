@@ -24,6 +24,19 @@ def get(path):
         return wrapper
     return decorator
 
+def options(path):
+    '''
+    Define decorator @options('/path')
+    '''
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kw):
+            return func(*args, **kw)
+        wrapper.__method__ = 'OPTIONS'
+        wrapper.__route__ = path
+        return wrapper
+    return decorator
+
 def post(path):
     '''
     Define decorator @post('/path')
@@ -105,7 +118,7 @@ class RequestHandler(object):
                     kw = dict(**params)
                 else:
                     return web.HTTPBadRequest('Unsupported Content-Type: %s' % request.content_type)
-            if request.method == 'GET':
+            if request.method == 'GET' or request.method == 'OPTIONS':
                 qs = request.query_string
                 if qs:
                     kw = dict()
