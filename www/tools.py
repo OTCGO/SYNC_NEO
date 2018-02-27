@@ -210,10 +210,10 @@ class Tool:
         generationAmount = [8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] 
         available = unavailable = D('0')
         heights = list(set(
-            [v['startIndex'] for v in claims.values()] + 
+            [v['startIndex']-1 for v in claims.values() if v['startIndex'] != 0] + 
             [v['stopIndex']-1 for v in claims.values()]))
         fresult = await asyncio.gather(*[db.blocks.find_one({'_id':h}) for h in heights])
-        fees = {0:0}
+        fees = {-1:0,0:0}
         for i in range(len(heights)):
             h = heights[i]
             if h not in fees.keys():
@@ -237,7 +237,7 @@ class Tool:
                     istart = 0
                 assert ustart == uend,'error X'
                 amount += (iend - istart) * generationAmount[ustart]
-            amount += fees[v['stopIndex']-1] - fees[v['startIndex']]
+            amount += fees[v['stopIndex']-1] - fees[v['startIndex']-1]
             if v['status']:
                 available += D(v['value']) / 100000000 * amount
             else:
