@@ -250,7 +250,7 @@ class Crawler:
                             if tx['script'].endswith('68134e656f2e436f6e74726163742e437265617465'):
                                 try:
                                     asset = self.parse_script(tx['script'])
-                                except EXCEPTION as e:
+                                except Exception as e:
                                     print('parse error:',e)
                                     continue
                                 asset['time'] = block_time
