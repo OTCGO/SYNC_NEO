@@ -17,6 +17,7 @@ NEP5 = {
         'a721d5893480260bd28ca1f395f2c465d0b5b1c2':'NRVE',
         '891daf0e1750a1031ebe23030828ad7781d874d6':'IAM',
         'ceab719b8baa2310f232ee0d277c061704541cfb':'ONT',
+        '0e86a40588f715fcaf7acd1812d50af478e6e917':'OBT',
         }
 GLOBAL = {
         'c56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b':'GoverningToken',#NEO
