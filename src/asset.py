@@ -240,6 +240,7 @@ class Crawler:
             if 'decimals' == func:
                 asset[func] = r['stack'][0]['value']
         try:
+            asset['type'] = 'nep5'
             await self.assets.update_one({'_id':_id},
                     {'$set':asset},upsert=True)
         except Exception as e:
