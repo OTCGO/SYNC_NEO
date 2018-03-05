@@ -84,6 +84,11 @@ class Crawler:
             s += tmp
         return int(s, 16)
 
+    @classmethod
+    def hex_to_num_str(cls, hs):
+        bs = unhexlify(hs)
+        return sci_to_str(str(D(cls.bytes_to_num(bs))/100000000))
+
     @staticmethod
     def script_to_hash(unhex):
         intermed = hashlib.sha256(unhex).digest()
@@ -152,9 +157,10 @@ class Crawler:
         contract_length_length,unhex = contract_dict[unhex[0]], unhex[1:]
         contract_length, unhex = cls.bytes_to_num(unhex[:contract_length_length]), unhex[contract_length_length:]
         contract = cls.script_to_hash(unhex[:contract_length])
+        print('contract:',contract)
         return {
                 'contract':contract,
-                'name':name,
+                'contract_name':name,
                 'version':version,
                 'parameter':parameter,
                 'return_type':return_type,
@@ -190,6 +196,15 @@ class Crawler:
         else:
             return result['value']
 
+    async def get_invokefunction(self, contract, func):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to get invokefunction')
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']
+
     async def update_asset_state(self, height):
         await self.state.update_one({'_id':'asset'}, {'$set': {'value':height}}, upsert=True)
 
@@ -209,8 +224,21 @@ class Crawler:
             sys.exit(1)
 
     async def update_a_nep5_asset(self, key, asset):
-        _id = key
+        _id = contract = key
+        funcs = ['totalSupply','name','symbol','decimals']
         del asset['contract']
+        results = await asyncio.gather(*[self.get_invokefunction(contract, func) for func in funcs])
+        for i in range(len(funcs)):
+            func = funcs[i]
+            r = results[i]
+            if r['state'].startswith('FAULT'):
+                return
+            if 'totalSupply' == func:
+                asset[func] = self.hex_to_num_str(r['stack'][0]['value'])
+            if func in ['name', 'symbol']:
+                asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
+            if 'decimals' == func:
+                asset[func] = r['stack'][0]['value']
         try:
             await self.assets.update_one({'_id':_id},
                     {'$set':asset},upsert=True)
