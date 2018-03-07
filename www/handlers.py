@@ -80,6 +80,18 @@ async def get_all_utxo(request, address):
         result[asset].append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
     return result
 
+async def get_all_asset(request):
+    result = {'GLOBAL':[],'NEP5':[]}
+    cursor = request.app['db'].assets.find()
+    for doc in await cursor.to_list(None):
+        doc['id'] = doc['_id']
+        del doc['_id']
+        if 'NEP5' == doc['type']:
+            result['NEP5'].append(doc)
+        else:
+            result['GLOBAL'].append(doc)
+    return result
+
 @get('/')
 def index(request):
     return {'hello':'neo'}
@@ -89,6 +101,11 @@ async def height(net, request):
     if not valid_net(net): return {'error':'wrong net'}
     r = await request.app['db'].state.find_one({'_id':'height'}) 
     return {'height':r['value']+1}
+
+@get('/{net}/asset')
+async def asset(net, request):
+    if not valid_net(net): return {'error':'wrong net'}
+    return await get_all_asset(request)
 
 @get('/{net}/block/{block}')
 async def block(net, block, request):

@@ -215,6 +215,8 @@ class Crawler:
         return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
     async def update_a_global_asset(self, key, asset):
+        if key.startswith('0x'):
+            key = key[2:]
         _id = key
         try:
             await self.assets.update_one({'_id':_id},
@@ -240,7 +242,7 @@ class Crawler:
             if 'decimals' == func:
                 asset[func] = r['stack'][0]['value']
         try:
-            asset['type'] = 'nep5'
+            asset['type'] = 'NEP5'
             await self.assets.update_one({'_id':_id},
                     {'$set':asset},upsert=True)
         except Exception as e:
