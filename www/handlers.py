@@ -1,3 +1,4 @@
+import os
 import asyncio
 from coreweb import get, post, options
 from aiohttp import web
@@ -8,10 +9,13 @@ from tools import Tool, check_decimal, sci_to_str
 from assets import NEO,NEP5, validate_asset, get_asset_decimal
 import logging
 logging.basicConfig(level=logging.DEBUG)
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=True)
 
+NET = os.environ.get('NET')
 
 def valid_net(net):
-    return 'mainnet' == net
+    return NET == net
 
 async def get_rpc(request,method,params):
     async with request.app['session'].post(request.app['neo_uri'],
