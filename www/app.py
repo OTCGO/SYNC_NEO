@@ -29,6 +29,9 @@ def get_neo_uri():
     return 'http://%s:%s' % (neo_node, neo_port)
 
 get_mongo_db = lambda:os.environ.get('MONGODB')
+get_listen_ip = lambda:os.environ.get('LISTENIP')
+get_listen_port = lambda:os.environ.get('LISTENPORT')
+
 async def logger_factory(app, handler):
     async def logger(request):
         logging.info('request:%s %s' % (request.method, request.path))
@@ -99,13 +102,15 @@ async def init(loop):
     mongo_uri = get_mongo_uri()
     neo_uri = get_neo_uri()
     mongo_db = get_mongo_db()
+    listen_ip = get_listen_ip()
+    listen_port = get_listen_port()
     app['client'] = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri)
     app['db'] = app['client'][mongo_db]
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
     add_routes(app, 'handlers')
-    srv = await loop.create_server(app.make_handler(), '0.0.0.0', 9999)
-    logging.info('server started at http://0.0.0.0:9999...')
+    srv = await loop.create_server(app.make_handler(), listen_ip, listen_port)
+    logging.info('server started at http://%s:%s...' % (listen_ip, listen_port))
     return srv
 
 loop = asyncio.get_event_loop()
