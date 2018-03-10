@@ -17,6 +17,10 @@ NET = os.environ.get('NET')
 def valid_net(net):
     return NET == net
 
+def valid_asset(asset):
+    if len(asset) in [40,64]: return True
+    return False
+
 async def get_rpc(request,method,params):
     async with request.app['session'].post(request.app['neo_uri'],
             json={'jsonrpc':'2.0','method':method,'params':params,'id':1}) as resp:
@@ -92,6 +96,9 @@ async def get_all_asset(request):
             result['GLOBAL'].append(doc)
     return result
 
+async def get_an_asset(id, request):
+    return await request.app['db'].assets.find_one({'_id':id}) 
+
 @get('/')
 def index(request):
     return {'hello':'neo'}
@@ -103,9 +110,18 @@ async def height(net, request):
     return {'height':r['value']+1}
 
 @get('/{net}/asset')
-async def asset(net, request):
+async def asset(net, request, *, id=0):
     if not valid_net(net): return {'error':'wrong net'}
-    return await get_all_asset(request)
+    if 0 == id:
+        return await get_all_asset(request)
+    if id.startswith('0x'): id = id[2:]
+    if not valid_asset(id): return {'error':'asset not exist'}
+    r = await get_an_asset(id, request)
+    if r: 
+        r['id'] = r['_id']
+        del r['_id']
+        return r
+    return {'error':'asset not exist'}
 
 @get('/{net}/block/{block}')
 async def block(net, block, request):
