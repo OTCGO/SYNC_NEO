@@ -170,17 +170,21 @@ async def claim(net, address, request):
     return await Tool.compute_gas(height, raw_utxo, request.app['db'])
 
 @get('/{net}/history/{address}')
-async def history(net, address, request, **kw):
+async def history(net, address, request, *, asset=0):
     if not valid_net(net): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     raw_utxo = []
-    cursor = request.app['db'].history.find({'address':address}).sort('time', DESCENDING)
+    query = {'address':address}
+    if 0 != asset:
+        if asset.startswith('0x'): asset = asset[2:]
+        if not valid_asset(asset): return {'error':'asset not exist'}
+        query['asset'] = '0x' + asset
+    cursor = request.app['db'].history.find(query).sort('time', DESCENDING)
     for document in await cursor.to_list(length=100):
         del document['_id']
         del document['address']
         raw_utxo.append(document)
     return {'result':raw_utxo}
-
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
