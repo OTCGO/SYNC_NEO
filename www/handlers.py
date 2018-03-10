@@ -101,7 +101,28 @@ async def get_an_asset(id, request):
 
 @get('/')
 def index(request):
-    return {'hello':'neo'}
+    return {'hello':'neo',
+            'GET':[
+                '/',
+                '/{net}/height',
+                '/{net}/block/{block}',
+                '/{net}/transaction/{txid}',
+                '/{net}/claim/{address}',
+                '/{net}/address/{address}',
+                '/{net}/asset?id={assetid}',
+                '/{net}/history/{address}?asset={assetid}',
+                ],
+            'POST':[
+                '/{net}/gas',
+                '/{net}/transfer',
+                '/{net}/broadcast',
+                ],
+            'ref':{
+                'How to transfer?':'http://note.youdao.com/noteshare?id=b60cc93fa8e8804394ade199c52d6274',
+                'How to claim GAS?':'http://note.youdao.com/noteshare?id=c2b09b4fa26d59898a0f968ccd1652a0',
+                'Source Code':'https://github.com/OTCGO/SYNC_NEO/',
+                },
+            }
 
 @get('/{net}/height')
 async def height(net, request):
