@@ -82,6 +82,8 @@ class Crawler:
             tmp = hex(bs[i])[2:]
             if 1 == len(tmp): tmp = '0' + tmp
             s += tmp
+        else:
+            if '0x' == s: s += '00'
         return int(s, 16)
 
     @classmethod
