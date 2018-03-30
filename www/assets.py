@@ -22,6 +22,8 @@ NEP5 = {
         '67a5086bac196b67d5fd20745b0dc9db4d2930ed':'THOR',
         '9577c3f972d769220d69d1c4ddbd617c44d067aa':'GALA',
         '78e6d16b914fe15bc16150aeb11d0c2a8e532bdd':'SWH',
+        'e8f98440ad0d7a6e76d84fb1c3d3f8a16e162e97':'EXT',
+        '81c089ab996fc89c468a26c0a88d23ae2f34b5c0':'EDS',
         }
 GLOBAL = {
         'c56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b':'GoverningToken',#NEO
