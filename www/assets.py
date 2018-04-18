@@ -25,6 +25,9 @@ NEP5 = {
         'e8f98440ad0d7a6e76d84fb1c3d3f8a16e162e97':'EXT',
         '81c089ab996fc89c468a26c0a88d23ae2f34b5c0':'EDS',
         '06fa8be9b6609d963e8fc63977b9f8dc5f10895f':'LRN',
+        '7ac4a2bb052a047506f2f2d3d1528b89cc38e8d4':'XQT',
+        'a0b328c01eac8b12b0f8a4fe93645d18fb3f1f0a':'NKN',
+        'acbc532904b6b51b5ea6d19b803d78af70e7e6f9':'EFX',
         }
 GLOBAL = {
         'c56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b':'GoverningToken',#NEO
