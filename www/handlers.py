@@ -5,7 +5,7 @@ from aiohttp import web
 from decimal import Decimal as D
 from pymongo import DESCENDING
 from apis import APIValueError, APIResourceNotFoundError, APIError
-from tools import Tool, check_decimal, sci_to_str
+from tools import Tool, check_decimal, sci_to_str, big_or_little
 from assets import NEO,NEP5, validate_asset, get_asset_decimal
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -46,8 +46,12 @@ async def send_raw_transaction(tx, request):
         return j['result'],''
 
 async def get_nep5_asset_balance(request, address, asset):
-    result = await get_rpc(request, 'getstorage', [asset, Tool.address_to_scripthash(address)])
-    if result: return Tool.hex_to_num_str(result)
+    result = await get_rpc(request, 'invokefunction',
+            [asset, "balanceOf", [{"type":"Hash160","value":big_or_little(Tool.address_to_scripthash(address))}]])
+    if result and "HALT, BREAK" == result["state"]:
+        hex_str = result['stack'][0]['value']
+        if hex_str: return Tool.hex_to_num_str(hex_str)
+        return '0'
     return '0'
 
 async def get_multi_nep5_balance(request, address, asset_list):
