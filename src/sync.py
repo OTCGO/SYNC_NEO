@@ -19,6 +19,8 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 now = lambda:time.time()
 
 def get_mongo_uri():
+    mongo_uri    = os.environ.get('MONGOURI')
+    if mongo_uri: return mongo_uri
     mongo_server = os.environ.get('MONGOSERVER')
     mongo_port   = os.environ.get('MONGOPORT')
     mongo_user   = os.environ.get('MONGOUSER')

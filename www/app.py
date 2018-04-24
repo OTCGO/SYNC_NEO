@@ -14,6 +14,8 @@ load_dotenv(find_dotenv(), override=True)
 
 
 def get_mongo_uri():
+    mongo_uri    = os.environ.get('MONGOURI')
+    if mongo_uri: return mongo_uri
     mongo_server = os.environ.get('MONGOSERVER')
     mongo_port   = os.environ.get('MONGOPORT')
     mongo_user   = os.environ.get('MONGOUSER')
