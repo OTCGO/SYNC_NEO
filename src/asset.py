@@ -98,27 +98,56 @@ class Crawler:
         intermed = hashlib.sha256(unhex).digest()
         return big_or_little(hexlify(hashlib.new('ripemd160', intermed).digest()).decode('ascii'))
 
+    @staticmethod
+    def parse_element(script):
+        content = ''
+        content_length = 0
+        if '00' == script[:2]:
+            script = script[2:]
+        elif '4c' == script[0:2]:
+            content_length = int(script[2:4], 16)
+            content = script[4:4+content_length*2]
+            script = script[4+content_length*2:]
+        elif '4d' == script[0:2]:
+            content_length = int(big_or_little(script[2:6]), 16)
+            content = script[6:6+content_length*2]
+            script = script[6+content_length*2:]
+        elif '4e' == script[0:2]:
+            content_length = int(big_or_little(script[2:10]), 16)
+            content = script[10:10+content_length*2]
+            script = script[10+content_length*2:]
+        else:
+            content_length = int(script[:2], 16)
+            content = script[2:2+content_length*2]
+            script = script[2+content_length*2:]
+        return unhexlify(content).decode('utf8'), script
+
     @classmethod
     def parse_script(cls, script):
-        unhex = unhexlify(script)
-        description, description_length, unhex = '', unhex[0], unhex[1:]
-        if description_length: description, unhex = unhex[:description_length].decode('utf8'), unhex[description_length:]
+        description, script = cls.parse_element(script)
         print('description:',description)
-        email, email_length, unhex = '', unhex[0], unhex[1:]
-        if email_length: email, unhex = unhex[:email_length].decode('utf8'), unhex[email_length:]
+        email,script = cls.parse_element(script)
         print('email:',email)
-        author, author_length, unhex = '', unhex[0], unhex[1:]
-        if author_length: author, unhex = unhex[:author_length].decode('utf8'), unhex[author_length:]
+        author, script = cls.parse_element(script)
         print('author:',author)
-        version, version_length, unhex = '', unhex[0], unhex[1:]
-        if version_length: version, unhex = unhex[:version_length].decode('utf8'), unhex[version_length:]
+        version, script = cls.parse_element(script)
         print('version:',version)
-        name, name_length, unhex = '', unhex[0], unhex[1:]
-        if name_length: name, unhex = unhex[:name_length].decode('utf8'), unhex[name_length:]
+        name, script = cls.parse_element(script)
         print('name:',name)
-        use_storage = True if 81 == unhex[0] else False
+        unhex = unhexlify(script)
+
+        if 0 == unhex[0]:
+            use_storage, dynamic_call = False, False
+        if 81 == unhex[0]:
+            use_storage, dynamic_call = True, False
+        if 82 == unhex[0]:
+            use_storage, dynamic_call = False, True
+        if 83 == unhex[0]:
+            use_storage, dynamic_call = True, True
         print('use_storage:',use_storage)
+        print('dynamic_call:',dynamic_call)
         unhex = unhex[1:]
+
         return_dict = {
                 0:'Signature',
                 81:'Boolean',
@@ -135,6 +164,7 @@ class Crawler:
         return_type = return_dict[unhex[0]]
         print('return_type:',return_type)
         unhex = unhex[1:]
+
         parameter_dict = {
                 0:'Signature',
                 1:'Boolean',
@@ -153,6 +183,7 @@ class Crawler:
             parameter.append(parameter_dict[unhex[0]])
             unhex = unhex[1:]
         print('parameters:',parameter)
+
         contract_dict = {
                 76:1,
                 77:2,
@@ -162,6 +193,7 @@ class Crawler:
         contract_length, unhex = cls.bytes_to_num(unhex[:contract_length_length]), unhex[contract_length_length:]
         contract = cls.script_to_hash(unhex[:contract_length])
         print('contract:',contract)
+
         return {
                 'contract':contract,
                 'contract_name':name,
@@ -169,9 +201,10 @@ class Crawler:
                 'parameter':parameter,
                 'return_type':return_type,
                 'use_storage':use_storage,
+                'dynamic_call':dynamic_call,
                 'author':author,
                 'email':email,
-                'description':description
+                'description':description,
                 }
 
     async def get_block(self, height):
