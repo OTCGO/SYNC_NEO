@@ -4,6 +4,7 @@ from coreweb import get, post, options
 from aiohttp import web
 from decimal import Decimal as D
 from pymongo import DESCENDING
+from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
 from assets import NEO, GLOBAL_TYPES
@@ -41,6 +42,7 @@ async def get_rpc(request,method,params):
 async def send_raw_transaction(tx, request):
     async with request.app['session'].post(request.app['neo_uri'],
             json={'jsonrpc':'2.0','method':'sendrawtransaction','params':[tx],'id':1}) as resp:
+        method = 'sendrawtransaction'
         if 200 != resp.status:
             logging.error('Unable to visit %s %s' % (request.app['neo_uri'], method))
             return False,'404'
@@ -293,6 +295,108 @@ async def gas(net, request, *, publicKey, **kw):
     if result:
         return {'result':True, 'transaction':tx}
     return {'result':False, 'error':msg}
+
+@post('/{net}/new_contract')
+async def new_contract(net, contract, address, request, **kw):
+    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    description =   kw.get('description','')
+    email =         kw.get('email', '')
+    author =        kw.get('author', '')
+    version =       kw.get('version', '')
+    name =          kw.get('name', '')
+    storage =       kw.get('storage', '0')
+    dynamic_invoke= kw.get('dynamic_invoke', '0')
+    return_type =   kw.get('return_type', 'void')
+    parameter =     kw.get('parameter', '')
+    def str_to_hex_str(s):
+        return hexlify(s.encode('utf8')).decode('utf8')
+    tx = ''
+    for k,v in {'description':description,
+                'email':email,
+                'author':author,
+                'version':version,
+                'name':name}.items():
+        v = str_to_hex_str(v)
+        if 0 == len(v):
+            tx += '00'
+            continue
+        if len(v)/2>255: return {'result':False, 'error':'%s is too long' % k}
+        tx += Tool.num_to_hex_str(len(v)//2) + v
+    #use_storage && dynamic_invoke
+    sys_fee = 0
+    for k,v in {'storage':storage,
+                'dynamic_invoke':dynamic_invoke,
+                }.items():
+        if v not in ['0','1']: return {'result':False, 'error':'wrong %s,must 0 or 1' % k}
+    else:
+        if '0' == storage and '0' == dynamic_invoke:
+            tx += '00'
+            sys_fee = 90
+        if '1' == storage and '0' == dynamic_invoke:
+            tx += '51'
+            sys_fee = 490
+        if '0' == storage and '1' == dynamic_invoke:
+            tx += '52'
+            sys_fee = 590
+        if '1' == storage and '1' == dynamic_invoke:
+            tx += '53'
+            sys_fee = 990
+    #return_type
+    return_dict = {
+            'signature':'00',
+            'boolean':'51',
+            'integer':'52',
+            'hash160':'53',
+            'hash256':'54',
+            'bytearray':'55',
+            'publickey':'56',
+            'string':'57',
+            'array':'60',
+            'interopinterface':'F0',
+            'void':'FF',
+        }
+    return_type = return_type.lower()
+    if return_type not in return_dict.keys(): return {'result':False, 'error':'wrong return type, must 0 or 1'}
+    tx += return_dict[return_type]
+    #parameter
+    parameter_dict = {
+            'signature':'00',
+            'boolean':'01',
+            'integer':'02',
+            'hash160':'03',
+            'hash256':'04',
+            'bytearray':'05',
+            'publickey':'06',
+            'string':'07',
+            'array':'10',
+            'interopinterface':'F0',
+            'void':'FF',
+            }
+    parameter = parameter.split(',')
+    parameter = list(filter(lambda i:i != '', parameter))
+    if not parameter:
+        tx += '00'
+    else:
+        if False in map(lambda x:x in parameter_dict.keys(), parameter):
+            return {'result':False, 'error':'wrong parameter'}
+        tx += Tool.num_to_hex_str(len(parameter))
+        for p in parameter:
+            tx += parameter_dict[p]
+    #contract
+    contract_len = len(contract)
+    if 0 == contract_len or 1 == contract_len%2: return {'result':False, 'error':'wrong length of the contract'}
+    contract_len = contract_len // 2
+    if contract_len <= 0xFF:
+        tx += '4c' + Tool.num_to_hex_str(contract_len) + contract
+    elif contract_len <= 0xFFFF:
+        tx += '4d' + Tool.num_to_hex_str(contract_len, 2) + contract
+    else:
+        tx += '4e' + Tool.num_to_hex_str(contract_len, 4) + contract
+    tx += '68134e656f2e436f6e74726163742e437265617465'
+    #check balance
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
+    #InvocationTransaction
+    return {'result':True, 'transaction':tx}
 
 @post('/{net}/broadcast')
 async def broadcast(net, request, *, publicKey, signature, transaction):
