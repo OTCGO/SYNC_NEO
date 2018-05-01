@@ -6,7 +6,7 @@ from decimal import Decimal as D
 from pymongo import DESCENDING
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO,NEP5, validate_asset, get_asset_decimal
+from assets import NEO, GLOBAL_TYPES
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
@@ -14,12 +14,17 @@ load_dotenv(find_dotenv(), override=True)
 
 NET = os.environ.get('NET')
 
+
 def valid_net(net):
     return NET == net
 
 def valid_asset(asset):
     if len(asset) in [40,64]: return True
     return False
+
+def get_asset_decimal(asset):
+    if asset['type'] in GLOBAL_TYPES: return asset["precision"]
+    return int(asset['decimals'])
 
 async def get_rpc(request,method,params):
     async with request.app['session'].post(request.app['neo_uri'],
@@ -95,7 +100,7 @@ async def get_asset_state(request):
 
 async def get_all_global(request):
     result = []
-    cursor = request.app['db'].assets.find({"type":{"$in":["GoverningToken","UtilityToken","Share","Token"]}})
+    cursor = request.app['db'].assets.find({"type":{"$in":GLOBAL_TYPES}})
     for doc in await cursor.to_list(None):
         doc['id'] = doc['_id']
         del doc['_id']
@@ -120,7 +125,7 @@ async def get_an_asset(id, request):
 
 @get('/')
 def index(request):
-    return {'hello':'neo',
+    return {'hello':'%s' % NET,
             'GET':[
                 '/',
                 '/{net}/height',
@@ -188,7 +193,8 @@ async def address(net, address, request):
     if not valid_net(net): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     result = {'_id':address,'balances':{}}
-    nep5_keys = list(NEP5.keys())
+    nep5 = await get_all_nep5(request)
+    nep5_keys = [n['id'] for n in nep5]
     aresult = await asyncio.gather(
             get_all_utxo(request,address),
             get_multi_nep5_balance(request, address, nep5_keys))
@@ -232,11 +238,13 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     if not valid_net(net): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
     if assetId.startswith('0x'): assetId = assetId[2:]
-    if not validate_asset(assetId): return {'result':False, 'error':'wrong assetId'}
+    if not valid_asset(assetId): return {'result':False, 'error':'wrong assetId'}
+    asset = await get_an_asset(assetId, request)
+    if not asset: return {'result':False, 'error':'wrong assetId'}
     nep5_asset = global_asset = False
     if 40 == len(assetId): nep5_asset = True
     if 64 == len(assetId): global_asset = True
-    ad = get_asset_decimal(assetId)
+    ad = get_asset_decimal(asset)
     dests,amounts = dests.split(','), amounts.split(',')
     ld,la = len(dests), len(amounts)
     if ld != la: return {'result':False, 'error':'length of dests != length of amounts'}
