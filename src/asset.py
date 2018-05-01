@@ -161,7 +161,10 @@ class Crawler:
                 240:'InteropInterface',
                 255:'Void',
             }
-        return_type = return_dict[unhex[0]]
+        try:
+            return_type = return_dict[unhex[0]]
+        except:
+            return_type = hexlify(unhex[0])
         print('return_type:',return_type)
         unhex = unhex[1:]
 
@@ -273,7 +276,10 @@ class Crawler:
             if r['state'].startswith('FAULT'):
                 return
             if 'totalSupply' == func:
-                asset[func] = self.hex_to_num_str(r['stack'][0]['value'])
+                try:
+                    asset[func] = self.hex_to_num_str(r['stack'][0]['value'])
+                except:
+                    asset[func] = 'unknown'
             if func in ['name', 'symbol']:
                 asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
             if 'decimals' == func:
