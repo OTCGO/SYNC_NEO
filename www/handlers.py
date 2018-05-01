@@ -88,17 +88,32 @@ async def get_all_utxo(request, address):
         result[asset].append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
     return result
 
-async def get_all_asset(request):
-    result = {'GLOBAL':[],'NEP5':[]}
-    cursor = request.app['db'].assets.find()
+async def get_asset_state(request):
+    result = await request.app['db'].state.find_one({'_id':'asset'})
+    if not result: return -1
+    return result['value']
+
+async def get_all_global(request):
+    result = []
+    cursor = request.app['db'].assets.find({"type":{"$in":["GoverningToken","UtilityToken","Share","Token"]}})
     for doc in await cursor.to_list(None):
         doc['id'] = doc['_id']
         del doc['_id']
-        if 'NEP5' == doc['type']:
-            result['NEP5'].append(doc)
-        else:
-            result['GLOBAL'].append(doc)
+        result.append(doc)
     return result
+
+async def get_all_nep5(request):
+    result = []
+    cursor = request.app['db'].assets.find({'type':'NEP5'})
+    for doc in await cursor.to_list(None):
+        doc['id'] = doc['_id']
+        del doc['_id']
+        result.append(doc)
+    return result
+
+async def get_all_asset(request):
+    results = await asyncio.gather(get_asset_state(request), get_all_global(request), get_all_nep5(request))
+    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2]}
 
 async def get_an_asset(id, request):
     return await request.app['db'].assets.find_one({'_id':id}) 
