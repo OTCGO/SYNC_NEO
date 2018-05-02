@@ -7,7 +7,7 @@ from pymongo import DESCENDING
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO, GLOBAL_TYPES
+from assets import NEO, GAS, GLOBAL_TYPES
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
@@ -203,6 +203,9 @@ async def address(net, address, request):
     result['utxo'],result['balances'] = aresult[0], aresult[1]
     for k,v in result['utxo'].items():
         result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
+    else:
+        if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
+        if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
     return result
 
 @get('/{net}/claim/{address}')
