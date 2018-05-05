@@ -100,102 +100,98 @@ class Crawler:
 
     @staticmethod
     def parse_element(script):
-        content = ''
+        content = None
         content_length = 0
-        if '00' == script[:2]:
-            script = script[2:]
-        elif '4c' == script[0:2]:
-            content_length = int(script[2:4], 16)
-            content = script[4:4+content_length*2]
-            script = script[4+content_length*2:]
-        elif '4d' == script[0:2]:
-            content_length = int(big_or_little(script[2:6]), 16)
-            content = script[6:6+content_length*2]
-            script = script[6+content_length*2:]
-        elif '4e' == script[0:2]:
-            content_length = int(big_or_little(script[2:10]), 16)
-            content = script[10:10+content_length*2]
-            script = script[10+content_length*2:]
-        else:
-            content_length = int(script[:2], 16)
+        uns = unhexlify(script)
+        mark = uns[0]
+        if 0x00 <= mark and mark <= 0x4B:
+            content_length = mark
             content = script[2:2+content_length*2]
             script = script[2+content_length*2:]
-        return unhexlify(content).decode('utf8'), script
+        elif 0x4C <= mark and mark <= 0x4E:
+            if 0x4C == mark:
+                content_length = int(script[2:4], 16)
+                content = script[4:4+content_length*2]
+                script = script[4+content_length*2:]
+            if 0x4D == mark:
+                content_length = int(big_or_little(script[2:6]), 16)
+                content = script[6:6+content_length*2]
+                script = script[6+content_length*2:]
+            if 0x4E == mark:
+                content_length = int(big_or_little(script[2:10]), 16)
+                content = script[10:10+content_length*2]
+                script = script[10+content_length*2:]
+        elif 0x4F == mark:
+            content = -1
+            script = script[2:]
+        elif 0x51 <= mark and mark <= 0x60:
+            content = mark - 0x50
+            script = script[2:]
+        else:
+            pass
+        return content, script
+
+    @staticmethod
+    def parse_storage_dynamic(mark):
+        if not isinstance(mark, int): raise ValueError('wrong type for storage&dynamic {}'.format(mark))
+        return 0x01 == mark & 0x01, 0x02 == mark & 0x02
+
+    @staticmethod
+    def get_arg_name(mark):
+        return {
+                0x00:'Signature',
+                0x01:'Boolean',
+                0x02:'Integer',
+                0x03:'Hash160',
+                0x04:'Hash256',
+                0x05:'bytearray',
+                0x06:'PublicKey',
+                0x07:'String',
+                0x10:'Array',
+                0xf0:'InteropInterface',
+                0xff:'Void',
+                }[mark]
+
+    @classmethod
+    def parse_return_type(cls, mark):
+        if isinstance(mark, str): mark = int(big_or_little(mark), 16)
+        if isinstance(mark, int): return cls.get_arg_name(mark)
+        raise ValueError('wrong type for return {}'.format(mark))
+
+    @classmethod
+    def parse_parameter(cls, mark):
+        if not isinstance(mark, str): raise ValueError('wrong type for paramater {}'.format(mark))
+        result = []
+        while mark:
+            result.append(cls.get_arg_name(int(mark[:2],16)))
+            mark = mark[2:]
+        return result
 
     @classmethod
     def parse_script(cls, script):
-        description, script = cls.parse_element(script)
-        print('description:',description)
-        email,script = cls.parse_element(script)
-        print('email:',email)
-        author, script = cls.parse_element(script)
-        print('author:',author)
-        version, script = cls.parse_element(script)
-        print('version:',version)
-        name, script = cls.parse_element(script)
-        print('name:',name)
-        unhex = unhexlify(script)
+        result = []
+        for i in range(5):
+            element, script = cls.parse_element(script)
+            element = unhexlify(element).decode('utf8')
+            result.append(element)
+        description,email,author,version,name = result
+        logger.info('description:{}\nemail:{}\nauthor:{}\nversion:{}\nname:{}'.format(description,email,author,version,name))
 
-        if 0 == unhex[0]:
-            use_storage, dynamic_call = False, False
-        if 81 == unhex[0]:
-            use_storage, dynamic_call = True, False
-        if 82 == unhex[0]:
-            use_storage, dynamic_call = False, True
-        if 83 == unhex[0]:
-            use_storage, dynamic_call = True, True
-        print('use_storage:',use_storage)
-        print('dynamic_call:',dynamic_call)
-        unhex = unhex[1:]
+        sd, script = cls.parse_element(script)
+        use_storage, dynamic_call = cls.parse_storage_dynamic(sd)
+        logger.info('use_storage:{}\ndynamic_call:{}'.format(use_storage,dynamic_call))
 
-        return_dict = {
-                0:'Signature',
-                81:'Boolean',
-                82:'Integer',
-                83:'Hash160',
-                84:'Hash256',
-                85:'ByteArray',
-                86:'PublicKey',
-                87:'String',
-                96:'Array',
-                240:'InteropInterface',
-                255:'Void',
-            }
-        try:
-            return_type = return_dict[unhex[0]]
-        except:
-            return_type = hexlify(unhex[0])
-        print('return_type:',return_type)
-        unhex = unhex[1:]
+        rmark, script = cls.parse_element(script)
+        return_type = cls.parse_return_type(rmark)
+        logger.info('return_type:{}'.format(return_type))
 
-        parameter_dict = {
-                0:'Signature',
-                1:'Boolean',
-                2:'Integer',
-                3:'Hash160',
-                4:'Hash256',
-                5:'bytearray',
-                6:'PublicKey',
-                7:'String',
-                16:'Array',
-                240:'InteropInterface',
-                255:'Void',
-                }
-        parameter, parameter_length, unhex = [], unhex[0], unhex[1:]
-        for i in range(parameter_length):
-            parameter.append(parameter_dict[unhex[0]])
-            unhex = unhex[1:]
-        print('parameters:',parameter)
+        pmark, script = cls.parse_element(script)
+        parameter = cls.parse_parameter(pmark)
+        logger.info('parameters:{}'.format(parameter))
 
-        contract_dict = {
-                76:1,
-                77:2,
-                78:4,
-                }
-        contract_length_length,unhex = contract_dict[unhex[0]], unhex[1:]
-        contract_length, unhex = cls.bytes_to_num(unhex[:contract_length_length]), unhex[contract_length_length:]
-        contract = cls.script_to_hash(unhex[:contract_length])
-        print('contract:',contract)
+        contract, script = cls.parse_element(script)
+        contract = cls.script_to_hash(unhexlify(contract))
+        logger.info('contract:{}'.format(contract))
 
         return {
                 'contract':contract,
