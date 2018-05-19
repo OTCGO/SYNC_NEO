@@ -78,7 +78,8 @@ class Crawler:
         self.processing = []
         self.cache = {}
         self.cache_log = {}
-        self.session = aiohttp.ClientSession(loop=loop)
+        conn = aiohttp.TCPConnector(limit=0)
+        self.session = aiohttp.ClientSession(loop=loop,connector=conn)
         self.net = os.environ.get('NET')
         self.super_node_uri = 'http://127.0.0.1:9999'
 
@@ -134,7 +135,7 @@ class Crawler:
 
     async def cache_applicationlog(self, txid):
         url = self.super_node_uri + '/' + self.net + '/log/' + txid
-        async with self.session.get(url) as resp:
+        async with self.session.get(url, timeout=120) as resp:
             if 200 != resp.status:
                 logger.error('Visit %s get status %s' % (url, resp.status))
                 return None
