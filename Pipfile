@@ -13,6 +13,7 @@ uvloop = "*"
 python-dotenv = "*"
 logzero = "*"
 pymongo = "*"
+"base58" = "*"
 
 
 [dev-packages]
