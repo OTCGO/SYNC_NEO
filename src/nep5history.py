@@ -78,7 +78,7 @@ class Crawler:
         self.processing = []
         self.cache = {}
         self.cache_log = {}
-        conn = aiohttp.TCPConnector(limit=0)
+        conn = aiohttp.TCPConnector(limit=10000)
         self.session = aiohttp.ClientSession(loop=loop,connector=conn)
         self.net = os.environ.get('NET')
         self.super_node_uri = 'http://127.0.0.1:9999'
