@@ -247,7 +247,7 @@ async def nep5history(net, address, request, *, asset=0):
     if 0 != asset:
         if asset.startswith('0x'): asset = asset[2:]
         if not valid_asset(asset): return {'error':'asset not exist'}
-        query['asset'] = '0x' + asset
+        query['asset'] = asset
     cursor = request.app['db'].nep5history.find(query).sort('time', DESCENDING)
     for document in await cursor.to_list(length=100):
         del document['_id']
