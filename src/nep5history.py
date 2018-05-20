@@ -81,7 +81,7 @@ class Crawler:
         conn = aiohttp.TCPConnector(limit=10000)
         self.session = aiohttp.ClientSession(loop=loop,connector=conn)
         self.net = os.environ.get('NET')
-        self.super_node_uri = 'http://127.0.0.1:9999'
+        self.super_node_uri = os.environ.get('SUPERNODE')
 
     def hex_to_num_str(self, fixed8_str):
         hex_str = big_or_little(fixed8_str)
