@@ -225,7 +225,10 @@ class Crawler:
                                 for i in range(len(log['notifications'])):
                                     n = log['notifications'][i]
                                     asset = n['contract'][2:]
-                                    if isinstance(n['state']['value'],list) and 4 == len(n['state']['value']) and '7472616e73666572' == n['state']['value'][0]['value']:
+                                    if 'value' in n['state'].keys() and \
+                                            isinstance(n['state']['value'],list) and \
+                                            4 == len(n['state']['value']) and \
+                                            '7472616e73666572' == n['state']['value'][0]['value']:
                                         value = self.hex_to_num_str(n['state']['value'][3]['value'])
                                         from_sh = n['state']['value'][1]['value']
                                         if from_sh:
