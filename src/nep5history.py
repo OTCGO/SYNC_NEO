@@ -85,6 +85,7 @@ class Crawler:
 
     def hex_to_num_str(self, fixed8_str):
         hex_str = big_or_little(fixed8_str)
+        if not hex_str: return '0'
         d = D(int('0x' + hex_str, 16))
         return sci_to_str(str(d/100000000))
 
