@@ -23,6 +23,19 @@ def valid_asset(asset):
     if len(asset) in [40,64]: return True
     return False
 
+def valid_page_arg(index, length):
+    try:
+        index = int(index)
+    except:
+        return False, {'error':'wrong index'}
+    try:
+        length = int(length)
+    except:
+        return False, {'error':'wrong length'}
+    if index <= 0: return False, {'error':'wrong index'}
+    if length <= 0 or length>100: return False, {'error':'wrong length'}
+    return True, {'index':index, 'length':length}
+
 def get_asset_decimal(asset):
     if asset['type'] in GLOBAL_TYPES: return asset["precision"]
     return int(asset['decimals'])
@@ -136,8 +149,8 @@ def index(request):
                 '/{net}/claim/{address}',
                 '/{net}/address/{address}',
                 '/{net}/asset?id={assetid}',
-                '/{net}/history/{address}?asset={assetid}',
-                '/{net}/nep5history/{address}?asset={assetid}',
+                '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
+                '/{net}/nep5history/{address}?asset={assetid}&index={index}&length={length}',
                 ],
             'POST':[
                 '/{net}/gas',
@@ -222,9 +235,13 @@ async def claim(net, address, request):
     return await Tool.compute_gas(height, raw_utxo, request.app['db'])
 
 @get('/{net}/history/{address}')
-async def history(net, address, request, *, asset=0):
+async def history(net, address, request, *, asset=0, index=1, length=20):
     if not valid_net(net): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
+    result,info = valid_page_arg(index, length)
+    if not result: return info
+    index, length = info['index'], info['length']
+    skip_num = (index - 1) * length
     raw_utxo = []
     query = {'address':address}
     if 0 != asset:
@@ -232,16 +249,20 @@ async def history(net, address, request, *, asset=0):
         if not valid_asset(asset): return {'error':'asset not exist'}
         query['asset'] = '0x' + asset
     cursor = request.app['db'].history.find(query).sort('time', DESCENDING)
-    for document in await cursor.to_list(length=100):
+    for document in await cursor.skip(skip_num).to_list(length=length):
         del document['_id']
         del document['address']
         raw_utxo.append(document)
     return {'result':raw_utxo}
 
 @get('/{net}/nep5history/{address}')
-async def nep5history(net, address, request, *, asset=0):
+async def nep5history(net, address, request, *, asset=0, index=1, length=20):
     if not valid_net(net): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
+    result,info = valid_page_arg(index, length)
+    if not result: return info
+    index, length = info['index'], info['length']
+    skip_num = (index - 1) * length
     raw_utxo = []
     query = {'address':address}
     if 0 != asset:
@@ -249,7 +270,7 @@ async def nep5history(net, address, request, *, asset=0):
         if not valid_asset(asset): return {'error':'asset not exist'}
         query['asset'] = asset
     cursor = request.app['db'].nep5history.find(query).sort('time', DESCENDING)
-    for document in await cursor.to_list(length=100):
+    for document in await cursor.skip(skip_num).to_list(length=length):
         del document['_id']
         del document['address']
         raw_utxo.append(document)
