@@ -145,6 +145,7 @@ class Crawler:
     def timestamp_to_utc(self, timestamp):
         return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
+
     async def crawl(self):
         self.start = await self.get_history_state()
         self.start += 1
@@ -181,6 +182,7 @@ class Crawler:
                 for block in self.cache.values():
                     block_time = self.timestamp_to_utc(block['time'])
                     for tx in block['tx']:
+
                         utxo_dict = {}
                         for vin in tx['vin']:
                             utxo = self.cache_utxo[vin['txid']][vin['vout']]
@@ -189,19 +191,30 @@ class Crawler:
                                 utxo_dict[key]['value'] = sci_to_str(str(D(utxo_dict[key]['value'])+D(utxo['value'])))
                             else:
                                 utxo_dict[key] = utxo
+
+                        vout_dict = {}
+                        for vout in tx['vout']:
+                            key = vout['asset'] + '_' + vout['address']
+                            if key in vout_dict.keys():
+                                vout_dict[key]['value'] = sci_to_str(str(D(vout_dict[key]['value'])+D(vout['value'])))
+                            else:
+                                vout_dict[key] = vout
+
                         utxos = list(utxo_dict.values())
                         for i in range(len(utxos)):
                             utxo = utxos[i]
-                            for j in range(len(tx['vout'])):
-                                vout = tx['vout'][j]
-                                if vout['asset']==utxo['asset'] and vout['address']==utxo['address']:
-                                    utxo['value'] = sci_to_str(str(D(utxo['value'])-D(vout['value'])))
-                                    del tx['vout'][j]
-                                    break
+                            key = utxo['asset'] + '_' + utxo['address']
+                            if key in vout_dict.keys():
+                                if D(utxo['value']) > D(vout_dict[key]['value']):
+                                    utxo['value'] = sci_to_str(str(D(utxo['value'])-D(vout_dict[key]['value'])))
+                                    del vout_dict[key]
                             vins.append([utxo, tx['txid'], i, block_time])
-                        for k in range(len(tx['vout'])):
-                            vout = tx['vout'][k]
+
+                        voutx = list(vout_dict.values())
+                        for k in range(len(voutx)):
+                            vout = voutx[k]
                             vouts.append([vout, tx['txid'], k, block_time])
+
                 if vins:
                     await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
                 if vouts:
