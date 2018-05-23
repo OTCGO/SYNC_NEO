@@ -200,6 +200,11 @@ class Crawler:
                             else:
                                 vout_dict[key] = vout
 
+                        if 1 == len(utxo_dict) == len(vout_dict) and utxo_dict.keys() == vout_dict.keys():
+                            key = list(utxo_dict.keys())[0]
+                            if utxo_dict[key]['value'] == vout_dict[key]['value']:
+                                break
+
                         utxos = list(utxo_dict.values())
                         for i in range(len(utxos)):
                             utxo = utxos[i]
