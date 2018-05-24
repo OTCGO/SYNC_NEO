@@ -38,7 +38,10 @@ def valid_page_arg(index, length):
 
 def get_asset_decimal(asset):
     if asset['type'] in GLOBAL_TYPES: return asset["precision"]
-    return int(asset['decimals'])
+    try:
+        return int(asset['decimals'])
+    except:
+        return 8
 
 async def get_rpc(request,method,params):
     async with request.app['session'].post(request.app['neo_uri'],
