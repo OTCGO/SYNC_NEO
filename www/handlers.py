@@ -153,7 +153,6 @@ def index(request):
                 '/{net}/address/{address}',
                 '/{net}/asset?id={assetid}',
                 '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
-                '/{net}/nep5history/{address}?asset={assetid}&index={index}&length={length}',
                 ],
             'POST':[
                 '/{net}/gas',
@@ -250,29 +249,14 @@ async def history(net, address, request, *, asset=0, index=1, length=20):
     if 0 != asset:
         if asset.startswith('0x'): asset = asset[2:]
         if not valid_asset(asset): return {'error':'asset not exist'}
-        query['asset'] = '0x' + asset
-    cursor = request.app['db'].history.find(query).sort('time', DESCENDING)
-    for document in await cursor.skip(skip_num).to_list(length=length):
-        del document['_id']
-        del document['address']
-        raw_utxo.append(document)
-    return {'result':raw_utxo}
-
-@get('/{net}/nep5history/{address}')
-async def nep5history(net, address, request, *, asset=0, index=1, length=20):
-    if not valid_net(net): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
-    result,info = valid_page_arg(index, length)
-    if not result: return info
-    index, length = info['index'], info['length']
-    skip_num = (index - 1) * length
-    raw_utxo = []
-    query = {'address':address}
-    if 0 != asset:
-        if asset.startswith('0x'): asset = asset[2:]
-        if not valid_asset(asset): return {'error':'asset not exist'}
-        query['asset'] = asset
-    cursor = request.app['db'].nep5history.find(query).sort('time', DESCENDING)
+        if 64 == len(asset):
+            query['asset'] = '0x' + asset
+        else:
+            query['asset'] = asset
+    if 'asset' in query.keys() and 40 == len(query['asset']):
+        cursor = request.app['db'].nep5history.find(query).sort('time', DESCENDING)
+    else:
+        cursor = request.app['db'].history.find(query).sort('time', DESCENDING)
     for document in await cursor.skip(skip_num).to_list(length=length):
         del document['_id']
         del document['address']
