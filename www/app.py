@@ -33,6 +33,7 @@ def get_neo_uri():
 get_mongo_db = lambda:os.environ.get('MONGODB')
 get_listen_ip = lambda:os.environ.get('LISTENIP')
 get_listen_port = lambda:os.environ.get('LISTENPORT')
+get_net = lambda:os.environ.get('NET')
 
 async def logger_factory(app, handler):
     async def logger(request):
@@ -110,6 +111,7 @@ async def init(loop):
     app['db'] = app['client'][mongo_db]
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
+    app['net'] = get_net()
     add_routes(app, 'handlers')
     srv = await loop.create_server(app.make_handler(), listen_ip, listen_port)
     logging.info('server started at http://%s:%s...' % (listen_ip, listen_port))

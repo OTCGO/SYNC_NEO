@@ -13,11 +13,9 @@ logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 
-NET = os.environ.get('NET')
 
-
-def valid_net(net):
-    return NET == net
+def valid_net(net, request):
+    return net == request.app['net']
 
 def valid_asset(asset):
     if len(asset) in [40,64]: return True
@@ -143,7 +141,7 @@ async def get_an_asset(id, request):
 
 @get('/')
 def index(request):
-    return {'hello':'%s' % NET,
+    return {'hello':'%s' % request.app['net'],
             'GET':[
                 '/',
                 '/{net}/height',
@@ -168,13 +166,13 @@ def index(request):
 
 @get('/{net}/height')
 async def height(net, request):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     r = await request.app['db'].state.find_one({'_id':'height'}) 
     return {'height':r['value']+1}
 
 @get('/{net}/asset')
 async def asset(net, request, *, id=0):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     if 0 == id:
         return await get_all_asset(request)
     if id.startswith('0x'): id = id[2:]
@@ -188,7 +186,7 @@ async def asset(net, request, *, id=0):
 
 @get('/{net}/block/{block}')
 async def block(net, block, request):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     try:
         b = int(block)
     except:
@@ -203,12 +201,12 @@ async def block(net, block, request):
 
 @get('/{net}/transaction/{txid}')
 async def transaction(net, txid, request):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     return await get_rpc(request, 'getrawtransaction', [txid,1])
 
 @get('/{net}/address/{address}')
 async def address(net, address, request):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     result = {'_id':address,'balances':{}}
     nep5 = await get_all_nep5(request)
@@ -226,7 +224,7 @@ async def address(net, address, request):
 
 @get('/{net}/claim/{address}')
 async def claim(net, address, request):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     raw_utxo = []
     cursor = request.app['db'].utxos.find({'address':address,'asset':NEO, 'claim_height':None})
@@ -238,7 +236,7 @@ async def claim(net, address, request):
 
 @get('/{net}/history/{address}')
 async def history(net, address, request, *, asset=0, index=1, length=20):
-    if not valid_net(net): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     result,info = valid_page_arg(index, length)
     if not result: return info
@@ -266,7 +264,7 @@ async def history(net, address, request, *, asset=0, index=1, length=20):
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     #params validation
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
     if assetId.startswith('0x'): assetId = assetId[2:]
     if not valid_asset(assetId): return {'result':False, 'error':'wrong assetId'}
@@ -309,7 +307,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
 @post('/{net}/gas')
 async def gas(net, request, *, publicKey, **kw):
     #params validation
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
     #get gas
     address = Tool.cpubkey_to_address(publicKey)
@@ -327,7 +325,7 @@ async def gas(net, request, *, publicKey, **kw):
 
 @post('/{net}/new_contract')
 async def new_contract(net, contract, address, request, **kw):
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     description =   kw.get('description','')
     email =         kw.get('email', '')
     author =        kw.get('author', '')
@@ -430,7 +428,7 @@ async def new_contract(net, contract, address, request, **kw):
 @post('/{net}/broadcast')
 async def broadcast(net, request, *, publicKey, signature, transaction):
     #params validation
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
     result,msg = Tool.verify(publicKey, signature, transaction)
     if not result: return {'result':False, 'error':msg}
@@ -443,13 +441,13 @@ async def broadcast(net, request, *, publicKey, signature, transaction):
 
 @options('/{net}/transfer')
 async def transfer_options(net):
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
 @options('/{net}/gas')
 async def gas_options(net):
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
 @options('/{net}/broadcast')
 async def broadcast_options(net):
-    if not valid_net(net): return {'result':False, 'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
