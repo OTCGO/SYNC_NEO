@@ -1,6 +1,7 @@
 import logging; logging.basicConfig(level=logging.INFO)
 import asyncio
 import aiohttp
+import aioredis
 import json
 import os
 import time
@@ -11,6 +12,7 @@ from aiohttp import web
 from coreweb import add_routes
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 def get_mongo_uri():
@@ -30,10 +32,24 @@ def get_neo_uri():
     neo_port = os.environ.get('NEOPORT')
     return 'http://%s:%s' % (neo_node, neo_port)
 
+def get_redis_db(net):
+    if 'testnet' == net: return '1'
+    if 'mainnet' == net: return '2'
+    return '0'
+
 get_mongo_db = lambda:os.environ.get('MONGODB')
 get_listen_ip = lambda:os.environ.get('LISTENIP')
 get_listen_port = lambda:os.environ.get('LISTENPORT')
 get_net = lambda:os.environ.get('NET')
+
+async def update_height(db, redis):
+    r,old = await asyncio.gather(
+            db.state.find_one({'_id':'height'}), 
+            redis.get('height')
+            )
+    height = r['value']+1
+    if old is None or int(old) < height:
+        await redis.set('height',height)
 
 async def logger_factory(app, handler):
     async def logger(request):
@@ -112,6 +128,15 @@ async def init(loop):
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
     app['net'] = get_net()
+    app['redis'] = await aioredis.create_redis(
+            'redis://localhost/' + get_redis_db(app['net']) + '?encoding=utf-8')
+    scheduler = AsyncIOScheduler(job_defaults = {
+                    'coalesce': True,
+                    'max_instances': 1,
+        })
+    scheduler.add_job(update_height, 'interval', seconds=1, args=[app['db'],app['redis']], id='update_height')
+    scheduler._logger = logging
+    scheduler.start()
     add_routes(app, 'handlers')
     srv = await loop.create_server(app.make_handler(), listen_ip, listen_port)
     logging.info('server started at http://%s:%s...' % (listen_ip, listen_port))

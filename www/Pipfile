@@ -16,6 +16,8 @@ bitcoin = "*"
 ecdsa = "*"
 python-dotenv = "*"
 pymongo = "*"
+aioredis = "*"
+apscheduler = "*"
 
 
 [dev-packages]

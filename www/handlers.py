@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 from coreweb import get, post, options
 from aiohttp import web
@@ -167,8 +168,7 @@ def index(request):
 @get('/{net}/height')
 async def height(net, request):
     if not valid_net(net, request): return {'error':'wrong net'}
-    r = await request.app['db'].state.find_one({'_id':'height'}) 
-    return {'height':r['value']+1}
+    return {'height':await request.app['redis'].get('height')}
 
 @get('/{net}/asset')
 async def asset(net, request, *, id=0):
