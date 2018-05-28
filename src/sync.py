@@ -152,6 +152,19 @@ class Crawler:
             block['total_sys_fee'] += block['sys_fee']
             base_sys_fee = block['total_sys_fee']
 
+    async def get_address_from_vin(self, vin):
+        _id = vin['txid'] + '_' + str(vin['vout'])
+        result = await self.utxos.find_one({'_id':_id})
+        if not result:
+            msg = 'Unable to fetch a spent utxo(_id=%s)'.format(_id)
+            logger.error(msg)
+            raise Exception(msg)
+            sys.exit(1)
+        return result['address']
+
+    async def update_addresses(self, height, uas):
+        await self.state.update_one({'_id':'update'}, {'$set': {'height':height,'value':uas}}, upsert=True)
+
     async def crawl(self):
         self.start = await self.get_state()
         self.start += 1
@@ -193,6 +206,14 @@ class Crawler:
                     await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
                 if claims:
                     await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
+
+                #cache update addresses
+                if stop == current_height and 1 == len(self.processing):
+                    uas = []
+                    vinas = await asyncio.gather(*[self.get_address_from_vin(vin[0]) for vin in vins])
+                    voutas = [vout[0]['address'] for vout in vouts]
+                    uas = list(set(vinas + voutas))
+                    await self.update_addresses(max_height, uas)
 
                 time_b = now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
