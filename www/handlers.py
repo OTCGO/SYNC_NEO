@@ -440,14 +440,14 @@ async def broadcast(net, request, *, publicKey, signature, transaction):
     return {'result':False, 'error':msg}
 
 @options('/{net}/transfer')
-async def transfer_options(net):
+async def transfer_options(net, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
 @options('/{net}/gas')
-async def gas_options(net):
+async def gas_options(net, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
 @options('/{net}/broadcast')
-async def broadcast_options(net):
+async def broadcast_options(net, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
