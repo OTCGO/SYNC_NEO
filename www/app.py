@@ -41,6 +41,9 @@ get_mongo_db = lambda:os.environ.get('MONGODB')
 get_listen_ip = lambda:os.environ.get('LISTENIP')
 get_listen_port = lambda:os.environ.get('LISTENPORT')
 get_net = lambda:os.environ.get('NET')
+get_redis_uri = lambda:os.environ.get('REDISURI')
+get_redis_pass = lambda:os.environ.get('REDISPASS')
+
 
 async def update_height(db, redis):
     r,old = await asyncio.gather(
@@ -128,8 +131,10 @@ async def init(loop):
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
     app['net'] = get_net()
+    redis_pass = get_redis_pass()
+    if not redis_pass:redis_pass=None
     app['redis'] = await aioredis.create_redis(
-            'redis://localhost/' + get_redis_db(app['net']) + '?encoding=utf-8')
+            get_redis_uri() + '/' + get_redis_db(app['net']) + '?encoding=utf-8', password=redis_pass)
     scheduler = AsyncIOScheduler(job_defaults = {
                     'coalesce': True,
                     'max_instances': 1,
