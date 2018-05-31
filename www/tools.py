@@ -117,7 +117,10 @@ class Tool:
     def cpubkey_to_address(cls, pubkey):
         redeem = cls.cpubkey_to_redeem(pubkey)
         scripthash = cls.redeem_to_scripthash(redeem)
-        return cls.scripthash_to_address(scripthash)
+        address = cls.scripthash_to_address(scripthash)
+        if isinstance(address, bytes):
+            address = address.decode('utf8')
+        return address
 
     @staticmethod
     def uncompress_pubkey(cpk):
