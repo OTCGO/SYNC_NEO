@@ -76,7 +76,9 @@ class Tool:
         '''
         获得单个16进制字符串
         '''
-        return hex(randint(0,255))[2:]
+        tmp = hex(randint(0,255))[2:]
+        if 1 == len(tmp): return '0'+tmp
+        return tmp
 
     @classmethod
     def get_random_byte_str(cls, num):
