@@ -143,7 +143,7 @@ class Crawler:
             sys.exit(1)
 
     def timestamp_to_utc(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.utcfromtimestamp(timestamp)
 
 
     async def crawl(self):
@@ -180,7 +180,7 @@ class Crawler:
                 vins= []
                 vouts = []
                 for block in self.cache.values():
-                    block_time = self.timestamp_to_utc(block['time'])
+                    block_time = block['time']
                     for tx in block['tx']:
 
                         utxo_dict = {}

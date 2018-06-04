@@ -311,7 +311,7 @@ class Crawler:
                 global_assets = {}
                 nep5_assets = {}
                 for block in self.cache.values():
-                    block_time = self.timestamp_to_utc(block['time'])
+                    block_time = block['time']
                     for tx in block['tx']:
                         if 'RegisterTransaction' == tx['type']:
                             global_assets[tx['txid']] = tx['asset']
