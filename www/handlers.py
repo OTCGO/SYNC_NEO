@@ -18,6 +18,9 @@ load_dotenv(find_dotenv(), override=True)
 def valid_net(net, request):
     return net == request.app['net']
 
+def valid_platform(platform):
+    return platform in ['ios','android']
+
 def valid_asset(asset):
     if len(asset) in [40,64]: return True
     return False
@@ -260,6 +263,17 @@ async def history(net, address, request, *, asset=0, index=1, length=20):
         del document['address']
         raw_utxo.append(document)
     return {'result':raw_utxo}
+
+@get('/{net}/version/{platform}')
+async def version(net, platform, request):
+    if not valid_net(net, request): return {'error':'wrong net'}
+    platform = platform.lower()
+    if not valid_platform(platform): return {'error':'wrong platform'}
+    info = await request.app['db'].state.find_one({'_id':platform})
+    if info:
+        del info['_id']
+        return {'result':True, 'version':info}
+    return {'result':False, 'error':'not exist'}
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
