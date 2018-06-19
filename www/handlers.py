@@ -13,6 +13,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
+from ont_handlers import get_rpc_ont, height_ont, block_ont, transaction_ont
 
 
 def valid_net(net, request):
@@ -149,8 +150,11 @@ def index(request):
             'GET':[
                 '/',
                 '/{net}/height',
+                '/{net}/height/ont',
                 '/{net}/block/{block}',
+                '/{net}/block/ont/{block}',
                 '/{net}/transaction/{txid}',
+                '/{net}/transaction/ont/{txid}',
                 '/{net}/claim/{address}',
                 '/{net}/address/{address}',
                 '/{net}/asset?id={assetid}',
