@@ -48,6 +48,7 @@ get_listen_port = lambda:os.environ.get('LISTENPORT')
 get_net = lambda:os.environ.get('NET')
 get_redis_uri = lambda:os.environ.get('REDISURI')
 get_redis_pass = lambda:os.environ.get('REDISPASS')
+get_ont_genesis_block_timestamp = lambda:int(os.environ.get('ONTGENESISBLOCKTIMESTAMP'))
 
 
 async def update_height(db, redis):
@@ -142,6 +143,7 @@ async def init(loop):
     if not redis_pass:redis_pass=None
     app['redis'] = await aioredis.create_redis(
             get_redis_uri() + '/' + get_redis_db(app['net']) + '?encoding=utf-8', password=redis_pass)
+    app['ont_genesis_block_timestamp'] = get_ont_genesis_block_timestamp()
     scheduler = AsyncIOScheduler(job_defaults = {
                     'coalesce': True,
                     'max_instances': 1,

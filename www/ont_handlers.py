@@ -2,6 +2,7 @@ import os
 import json
 import math
 import asyncio
+import datetime
 from decimal import Decimal as D
 from coreweb import get, post, options
 from tools import Tool, check_decimal, sci_to_str, big_or_little
@@ -19,8 +20,17 @@ assets = {
             'decimal':9
             },
         }
-decimal_ont = 1
-decimal_ong = 9
+UNBOUND_TIME_INTERVAL = 31536000
+UNBOUND_GENERATION_AMOUNT = [5, 4, 3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+ONT_TOTAL_SUPPLY = 1000000000
+ONG_TOTAL_SUPPLY = 1000000000
+
+def unbound_deadline():
+    count = sum(UNBOUND_GENERATION_AMOUNT)*UNBOUND_TIME_INTERVAL
+    num_interval = len(UNBOUND_GENERATION_AMOUNT)
+    return UNBOUND_TIME_INTERVAL*num_interval - (count - ONG_TOTAL_SUPPLY)
+
+UNBOUND_DEADLINE = unbound_deadline()
 
 def valid_net(net, request):
     return net == request.app['net']
@@ -41,7 +51,7 @@ async def get_rpc_ont(request,method,params):
 
 async def get_balance(request, address):
     result,err = await get_rpc_ont(request, 'getbalance', [address])
-    if err or not result: return {}
+    if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
         if assets[i]['decimal'] > 1:
             result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, assets[i]['decimal']))))
@@ -52,8 +62,40 @@ async def get_unclaim_ong(request, address):
     if err or not result: return "0"
     return sci_to_str(str(D(result)/D(math.pow(10, assets['ong']['decimal']))))
 
-async def compute_ong(request,addrss):
-    pass
+get_now_timestamp = lambda:int(datetime.datetime.utcnow().timestamp())
+
+async def get_unbound_offset(request, address):
+    #756e626f756e6454696d654f6666736574 = unboundTimeOffset
+    result,err = await get_rpc_ont(request, 'getstorage',
+            ['0100000000000000000000000000000000000000',
+                '756e626f756e6454696d654f6666736574'+Tool.address_to_scripthash(address)])
+    if err or not result: return 0
+    return int(big_or_little(result),16)
+
+async def compute_ong(request,address):
+    start_offset = await get_unbound_offset(request, address)
+    if not start_offset: return "0"
+    gbt = request.app['ont_genesis_block_timestamp']
+    now = get_now_timestamp()
+    end_offset = get_now_timestamp() - gbt
+    if end_offset <= start_offset: return "0"
+    b = await get_balance(request, address)
+    b_ont = b['ont']
+    if D(b_ont) <= 0: return "0"
+    amount = 0
+    if start_offset < UNBOUND_DEADLINE:
+        ustart = start_offset // UNBOUND_TIME_INTERVAL
+        istart = start_offset % UNBOUND_TIME_INTERVAL
+        if end_offset >= UNBOUND_DEADLINE:
+            end_offset = UNBOUND_DEADLINE
+        uend = end_offset // UNBOUND_TIME_INTERVAL
+        iend = end_offset % UNBOUND_TIME_INTERVAL
+        while ustart < uend:
+            amount += (UNBOUND_TIME_INTERVAL - istart) * UNBOUND_GENERATION_AMOUNT[ustart]
+            ustart += 1
+            istart = 0
+        amount += (iend - istart) * UNBOUND_GENERATION_AMOUNT[ustart]
+    return sci_to_str(str(amount * D(b_ont) / D(ONT_TOTAL_SUPPLY)))
 
 @get('/{net}/height/ont')
 async def height_ont(net, request):
