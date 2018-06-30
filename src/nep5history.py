@@ -6,6 +6,7 @@
 import os
 import sys
 import time
+import math
 import uvloop
 import asyncio
 import aiohttp
@@ -78,16 +79,17 @@ class Crawler:
         self.processing = []
         self.cache = {}
         self.cache_log = {}
+        self.cache_decimals = {}
         conn = aiohttp.TCPConnector(limit=10000)
         self.session = aiohttp.ClientSession(loop=loop,connector=conn)
         self.net = os.environ.get('NET')
         self.super_node_uri = os.environ.get('SUPERNODE')
 
-    def hex_to_num_str(self, fixed8_str):
+    def hex_to_num_str(self, fixed8_str, decimals=8):
         hex_str = big_or_little(fixed8_str)
         if not hex_str: return '0'
         d = D(int('0x' + hex_str, 16))
-        return sci_to_str(str(d/100000000))
+        return sci_to_str(str(d/D(math.pow(10, decimals))))
 
     @staticmethod
     def hash256(b):
@@ -99,6 +101,26 @@ class Crawler:
         result = b58encode(tmp + cls.hash256(tmp)[:4])
         if isinstance(result, bytes): result = result.decode('utf8')
         return result
+
+    async def get_invokefunction(self, contract, func):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to get invokefunction')
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']
+
+    async def get_decimals(self, contract):
+        d = await self.get_invokefunction(contract, 'decimals')
+        if 'state' in d.keys() and d['state'].startswith('HALT') and d['stack'][0]['value']:
+            return int(d['stack'][0]['value'])
+        return 8
+
+    async def get_cache_decimals(self, contract):
+        if contract not in self.cache_decimals.keys():
+            self.cache_decimals[contract] = await self.get_decimals(contract)
+        return self.cache_decimals[contract]
 
     async def get_block(self, height):
         async with self.session.post(self.neo_uri, json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
@@ -229,7 +251,7 @@ class Crawler:
                                             isinstance(n['state']['value'],list) and \
                                             4 == len(n['state']['value']) and \
                                             '7472616e73666572' == n['state']['value'][0]['value']:
-                                        value = self.hex_to_num_str(n['state']['value'][3]['value'])
+                                        value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
                                         from_sh = n['state']['value'][1]['value']
                                         if from_sh:
                                             from_address = self.scripthash_to_address(from_sh)
