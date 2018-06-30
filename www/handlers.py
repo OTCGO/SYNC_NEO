@@ -71,21 +71,26 @@ async def send_raw_transaction(tx, request):
             return False, j['error']['message']
         return j['result'],''
 
-async def get_nep5_asset_balance(request, address, asset):
+async def get_nep5_asset_balance(request, address, asset, decimals=8):
     result = await get_rpc(request, 'invokefunction',
             [asset, "balanceOf", [{"type":"Hash160","value":big_or_little(Tool.address_to_scripthash(address))}]])
     if result and "HALT, BREAK" == result["state"]:
         hex_str = result['stack'][0]['value']
-        if hex_str: return Tool.hex_to_num_str(hex_str)
+        if hex_str: return Tool.hex_to_num_str(hex_str, decimals)
         return '0'
     return '0'
 
-async def get_multi_nep5_balance(request, address, asset_list):
+async def get_multi_nep5_balance(request, address, assets):
     result = {}
+    for asset in assets:
+        try:
+            asset['decimals'] = int(asset['decimals'])
+        except:
+            asset['decimals'] = 8
     nep5_result = await asyncio.gather(
-            *[get_nep5_asset_balance(request, address, asset) for asset in asset_list])
-    for i in range(len(asset_list)):
-        result[asset_list[i]] = nep5_result[i]
+            *[get_nep5_asset_balance(request, address, asset["id"], asset['decimals']) for asset in assets])
+    for i in range(len(assets)):
+        result[assets[i]['id']] = nep5_result[i]
     return result
 
 async def get_utxo(request, address, asset):
@@ -219,10 +224,9 @@ async def address(net, address, request):
     if not Tool.validate_address(address): return {'error':'wrong address'}
     result = {'_id':address,'balances':{}}
     nep5 = await get_all_nep5(request)
-    nep5_keys = [n['id'] for n in nep5]
     aresult = await asyncio.gather(
             get_all_utxo(request,address),
-            get_multi_nep5_balance(request, address, nep5_keys))
+            get_multi_nep5_balance(request, address, nep5))
     result['utxo'],result['balances'] = aresult[0], aresult[1]
     for k,v in result['utxo'].items():
         result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
@@ -310,9 +314,9 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     #check balance && transaction
     tran_num = sum(amounts)
     if nep5_asset:
-        balance = D(await get_nep5_asset_balance(request, source, assetId))
+        balance = D(await get_nep5_asset_balance(request, source, assetId, ad))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
-        transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0])
+        transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0], ad)
         result,msg = True,''
     if global_asset:
         utxo = await get_utxo(request, source, assetId)

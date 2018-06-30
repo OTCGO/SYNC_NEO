@@ -6,6 +6,7 @@ import binascii
 import bitcoin
 import asyncio
 import hashlib
+import math
 from random import randint
 
 def sci_to_str(sciStr):
@@ -63,8 +64,8 @@ class Tool:
         return False
 
     @staticmethod
-    def decimal_to_hex(ds, length=8):
-        hex_str = hex(int(ds*D('100000000')))[2:]
+    def decimal_to_hex(ds, length=8, decimals=8):
+        hex_str = hex(int(ds*D(math.pow(10,decimals))))[2:]
         if len(hex_str)%2:
             hex_str = '0' + hex_str
         for i in range(length - len(hex_str)//2):
@@ -88,10 +89,10 @@ class Tool:
         return ''.join([cls.get_random_byte() for i in range(0,num)])
 
     @staticmethod
-    def hex_to_num_str(fixed8_str):
+    def hex_to_num_str(fixed8_str, decimals=8):
         hex_str = big_or_little(fixed8_str)
         d = D(int('0x' + hex_str, 16))
-        return sci_to_str(str(d/100000000))
+        return sci_to_str(str(d/D(math.pow(10, decimals))))
 
     @staticmethod
     def address_to_scripthash(address):
@@ -252,13 +253,13 @@ class Tool:
         return base
 
     @classmethod
-    def transfer_nep5(cls,apphash,source,dest,value):
+    def transfer_nep5(cls,apphash,source,dest,value,decimals=8):
         '''
         构建NEP5代币转账InvocationTransaction
         '''
         s = 'd101'
         script = ''
-        fa = cls.decimal_to_hex(value)
+        fa = cls.decimal_to_hex(value, 8, decimals)
         faLen = hex(len(fa)//2)[2:]
         if 1 == len(faLen) % 2:
             faLen = '0' + faLen
