@@ -58,7 +58,7 @@ async def get_balance(request, address):
     return result
 
 async def get_unclaim_ong(request, address):
-    result,err = await get_rpc_ont(request, 'getunclaimong', [address])
+    result,err = await get_rpc_ont(request, 'getunboundong', [address])
     if err or not result: return "0"
     return sci_to_str(str(D(result)/D(math.pow(10, assets['ong']['decimal']))))
 
