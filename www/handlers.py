@@ -169,8 +169,11 @@ def index(request):
                 ],
             'POST':[
                 '/{net}/gas',
+                '/{net}/ong',
                 '/{net}/transfer',
+                '/{net}/transfer/ont',
                 '/{net}/broadcast',
+                '/{net}/broadcast/ont',
                 ],
             'ref':{
                 'How to transfer?':'http://note.youdao.com/noteshare?id=b60cc93fa8e8804394ade199c52d6274',
