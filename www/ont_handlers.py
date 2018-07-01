@@ -183,21 +183,7 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
 @post('/{net}/ong')
 async def ong(net, request, *, publicKey, **kw):
     #params validation
-    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
-    if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
-    #get gas
-    address = Tool.cpubkey_to_address(publicKey)
-    raw_utxo = []
-    cursor = request.app['db'].utxos.find({'address':address,'asset':NEO, 'claim_height':None})
-    for document in await cursor.to_list(None):
-        raw_utxo.append(document)
-    r = await request.app['db'].state.find_one({'_id':'height'})
-    height = r['value'] + 1
-    details = await Tool.compute_gas(height, raw_utxo, request.app['db'])
-    tx,result,msg = Tool.claim_transaction(address, details)
-    if result:
-        return {'result':True, 'transaction':tx}
-    return {'result':False, 'error':msg}
+    pass
 
 @post('/{net}/broadcast/ont')
 async def broadcast_ont(net, request, *, publicKey, signature, transaction):
