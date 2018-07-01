@@ -271,6 +271,29 @@ class Tool:
         return s
 
     @classmethod
+    def transfer_ontology(cls,apphash,source,dest,value,decimals):
+        '''
+        构建ontology代币转账InvocationTransaction
+        '''
+        s = '00'    #version
+        s += 'd1'   #TransactionType
+        s += cls.get_random_byte_str(4) #Nonce
+        s += '0000000000000000'        #GasPrice
+        s += '3075000000000000'        #GasLimit
+        s += cls.address_to_scripthash(source) #Payer
+        script = '00c66b14' + cls.address_to_scripthash(source) + '6a7cc814' + cls.address_to_scripthash(dest) + '6a7cc8'
+        fa = cls.decimal_to_hex(value, 8, decimals)
+        faLen = hex(len(fa)//2)[2:]
+        if 1 == len(faLen) % 2:
+            faLen = '0' + faLen
+        script += faLen + fa + '6a7cc8' + '6c51c1' + '087472616e73666572' + '14' + apphash + '0068164f6e746f6c6f67792e4e61746976652e496e766f6b65'
+        scriptLen = hex(len(script)//2)[2:]
+        if 1 == len(scriptLen) % 2:
+            scriptLen = '0' + scriptLen
+        s += scriptLen + script + '00'
+        return s
+
+    @classmethod
     def transfer_global(cls, address, utxos, items, assetId):
         '''
         return:transaction,result,errmsg
@@ -314,6 +337,10 @@ class Tool:
 
     @staticmethod
     def get_transaction(cpubkey, signature, transaction):
+        return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
+
+    @staticmethod
+    def get_transaction_ontology(cpubkey, signature, transaction):
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
 
     @classmethod

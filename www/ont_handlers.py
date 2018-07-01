@@ -35,6 +35,15 @@ UNBOUND_DEADLINE = unbound_deadline()
 def valid_net(net, request):
     return net == request.app['net']
 
+def get_asset_name(aid):
+    for a in assets:
+        if aid == assets[a]['scripthash']:
+            return a
+    return ''
+
+def get_asset_decimal(aname):
+    return assets[aname]['decimal']
+
 async def get_rpc_ont(request,method,params):
     async with request.app['session'].post(request.app['ont_uri'],
             json={'jsonrpc':'2.0','method':method,'params':params,'id':1}) as resp:
@@ -49,13 +58,14 @@ async def get_rpc_ont(request,method,params):
             return None,msg
         return j['result'],None
 
-async def get_balance(request, address):
+async def get_balance(request, address, asset_name=None):
     result,err = await get_rpc_ont(request, 'getbalance', [address])
     if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
         if assets[i]['decimal'] > 1:
             result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, assets[i]['decimal']))))
-    return result
+    if not asset_name: return result
+    return result[asset_name]
 
 async def get_unclaim_ong(request, address):
     result,err = await get_rpc_ont(request, 'getunboundong', [address])
@@ -96,6 +106,9 @@ async def compute_ong(request,address):
             istart = 0
         amount += (iend - istart) * UNBOUND_GENERATION_AMOUNT[ustart]
     return sci_to_str(str(amount * D(b_ont) / D(ONT_TOTAL_SUPPLY)))
+
+async def ont_send_raw_transaction(tx, request):
+    return await get_rpc_ont(request, 'sendrawtransaction', [tx])
 
 @get('/{net}/height/ont')
 async def height_ont(net, request):
@@ -138,4 +151,80 @@ async def claim_ont(net, address, request):
 
 @post('/{net}/transfer/ont')
 async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
-    pass
+    #params validation
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
+    if assetId.startswith('0x'): assetId = assetId[2:]
+    aname = get_asset_name(assetId)
+    if not aname: return {'result':False, 'error':'wrong assetId'}
+    ad = get_asset_decimal(aname)
+    dests,amounts = dests.split(','), amounts.split(',')
+    ld,la = len(dests), len(amounts)
+    if ld != la: return {'result':False, 'error':'length of dests != length of amounts'}
+    if 1 != ld: return {'result':False, 'error':"NEP5 token transfer only support One to One"}
+    if False in map(Tool.validate_address, dests): return {'error':'wrong dests'}
+    try:
+        amounts = [D(a) for a in amounts]
+    except:
+        return {'result':False, 'error':'wrong amounts'}
+    if [a for a in amounts if a <= D(0)]: return {'error':'wrong amounts'}
+    if False in [check_decimal(a,ad) for a in amounts]:
+        return {'result':False, 'error':'wrong amounts'}
+    #check balance && transaction
+    tran_num = sum(amounts)
+    balance = D(await get_balance(request, source, aname))
+    if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
+    transaction = Tool.transfer_ontology(assetId, source, dests[0], amounts[0], ad)
+    result,msg = True,''
+    if result:
+        return {'result':True, 'transaction':transaction}
+    return {'result':False, 'error':msg}
+
+@post('/{net}/ong')
+async def ong(net, request, *, publicKey, **kw):
+    #params validation
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
+    #get gas
+    address = Tool.cpubkey_to_address(publicKey)
+    raw_utxo = []
+    cursor = request.app['db'].utxos.find({'address':address,'asset':NEO, 'claim_height':None})
+    for document in await cursor.to_list(None):
+        raw_utxo.append(document)
+    r = await request.app['db'].state.find_one({'_id':'height'})
+    height = r['value'] + 1
+    details = await Tool.compute_gas(height, raw_utxo, request.app['db'])
+    tx,result,msg = Tool.claim_transaction(address, details)
+    if result:
+        return {'result':True, 'transaction':tx}
+    return {'result':False, 'error':msg}
+
+@post('/{net}/broadcast/ont')
+async def broadcast_ont(net, request, *, publicKey, signature, transaction):
+    #params validation
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
+    result,msg = Tool.verify(publicKey, signature, transaction)
+    if not result: return {'result':False, 'error':msg}
+    tx = Tool.get_transaction_ontology(publicKey, signature, transaction)
+    logging.info('tx:\n%s\n' % tx)
+    txid = Tool.compute_txid(transaction)
+    result,msg = await ont_send_raw_transaction(tx, request)
+    if result:
+        if txid != result:
+            return {'result':True, 'error':'result:%s != txid:%s' % (result,txid)}
+        return {'result':True, 'txid':result}
+    return {'result':False, 'error':msg}
+
+@options('/{net}/transfer/ont')
+async def transfer_ont_options(net, request):
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    return 'OK'
+@options('/{net}/ong')
+async def ong_options(net, request):
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    return 'OK'
+@options('/{net}/broadcast/ont')
+async def broadcast_ont_options(net, request):
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    return 'OK'
