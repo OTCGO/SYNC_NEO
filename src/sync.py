@@ -3,41 +3,16 @@
 # flow@蓝鲸淘
 # Licensed under the MIT License.
 
-import os
 import sys
-import time
 import uvloop
 import asyncio
 import aiohttp
 import motor.motor_asyncio
 from logzero import logger
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+from Config import Config as C
+from CommonTool import CommonTool as CT
 
-
-now = lambda:time.time()
-
-def get_mongo_uri():
-    mongo_uri    = os.environ.get('MONGOURI')
-    if mongo_uri: return mongo_uri
-    mongo_server = os.environ.get('MONGOSERVER')
-    mongo_port   = os.environ.get('MONGOPORT')
-    mongo_user   = os.environ.get('MONGOUSER')
-    mongo_pass   = os.environ.get('MONGOPASS')
-    if mongo_user and mongo_pass:
-        return 'mongodb://%s:%s@%s:%s' % (mongo_user, mongo_pass, mongo_server, mongo_port)
-    else:
-        return 'mongodb://%s:%s' % (mongo_server, mongo_port)
-
-def get_neo_uri():
-    neo_node = os.environ.get('NEONODE')
-    neo_port = os.environ.get('NEOPORT')
-    return 'http://%s:%s' % (neo_node, neo_port)
-
-get_mongo_db = lambda:os.environ.get('MONGODB')
-
-get_tasks = lambda:os.environ.get('TASKS')
 
 class Crawler:
     def __init__(self, mongo_uri, mongo_db, neo_uri, loop, tasks='1000'):
@@ -171,7 +146,7 @@ class Crawler:
         
         while True:
             current_height = await self.get_block_count()
-            time_a = now()
+            time_a = CT.now()
             if self.start < current_height:
                 stop = self.start + self.max_tasks
                 if stop >= current_height:
@@ -215,7 +190,7 @@ class Crawler:
                     uas = list(set(vinas + voutas))
                     await self.update_addresses(max_height, uas)
 
-                time_b = now()
+                time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
                 await asyncio.wait([self.update_block(block) for block in self.cache.values()])
@@ -230,12 +205,12 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    START_TIME = now()
+    START_TIME = CT.now()
     logger.info('STARTING...')
-    mongo_uri = get_mongo_uri()
-    neo_uri = get_neo_uri()
-    mongo_db = get_mongo_db()
-    tasks = get_tasks()
+    mongo_uri = C.get_mongo_uri()
+    neo_uri = C.get_neo_uri()
+    mongo_db = C.get_mongo_db()
+    tasks = C.get_tasks()
     loop = asyncio.get_event_loop()
     crawler = Crawler(mongo_uri, mongo_db, neo_uri, loop, tasks)
     try:
