@@ -58,7 +58,7 @@ async def get_rpc_ont(request,method,params):
             return None,msg
         return j['result'],None
 
-async def get_balance(request, address, asset_name=None):
+async def get_ont_balance(request, address, asset_name=None):
     result,err = await get_rpc_ont(request, 'getbalance', [address])
     if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
@@ -89,7 +89,7 @@ async def compute_ong(request,address):
     now = get_now_timestamp()
     end_offset = get_now_timestamp() - gbt
     if end_offset <= start_offset: return "0"
-    b = await get_balance(request, address)
+    b = await get_ont_balance(request, address)
     b_ont = b['ont']
     if D(b_ont) <= 0: return "0"
     amount = 0
@@ -139,7 +139,7 @@ async def transaction_ont(net, txid, request):
 async def address_ont(net, address, request):
     if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
-    result = {'address':address,'balances':await get_balance(request, address)}
+    result = {'address':address,'balances':await get_ont_balance(request, address)}
     return result
 
 @get('/{net}/claim/ont/{address}')
@@ -172,7 +172,7 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
         return {'result':False, 'error':'wrong amounts'}
     #check balance && transaction
     tran_num = sum(amounts)
-    balance = D(await get_balance(request, source, aname))
+    balance = D(await get_ont_balance(request, source, aname))
     if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
     transaction = Tool.transfer_ontology(assetId, source, dests[0], amounts[0], ad)
     result,msg = True,''

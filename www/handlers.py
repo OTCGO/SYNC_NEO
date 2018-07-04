@@ -13,7 +13,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
-from ont_handlers import height_ont, block_ont, transaction_ont, address_ont, claim_ont, transfer_ont, ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
+from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
+from ont_handlers import assets as ONT_ASSETS
 
 
 def valid_net(net, request):
@@ -142,9 +143,22 @@ async def get_all_nep5(request):
         result.append(doc)
     return result
 
+async def get_all_ontology(request):
+    result = []
+    cursor = request.app['db'].assets.find({'type':'ONTOLOGY'})
+    for doc in await cursor.to_list(None):
+        doc['id'] = doc['_id']
+        del doc['_id']
+        result.append(doc)
+    return result
+
 async def get_all_asset(request):
-    results = await asyncio.gather(get_asset_state(request), get_all_global(request), get_all_nep5(request))
-    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2]}
+    results = await asyncio.gather(
+            get_asset_state(request),
+            get_all_global(request),
+            get_all_nep5(request),
+            get_all_ontology(request))
+    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2], 'ONTOLOGY':results[3]}
 
 async def get_an_asset(id, request):
     return await request.app['db'].assets.find_one({'_id':id}) 
@@ -229,8 +243,11 @@ async def address(net, address, request):
     nep5 = await get_all_nep5(request)
     aresult = await asyncio.gather(
             get_all_utxo(request,address),
-            get_multi_nep5_balance(request, address, nep5))
+            get_multi_nep5_balance(request, address, nep5),
+            get_ont_balance(request, address))
     result['utxo'],result['balances'] = aresult[0], aresult[1]
+    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
+    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
     for k,v in result['utxo'].items():
         result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
     else:
