@@ -72,7 +72,7 @@ async def get_unclaim_ong(request, address):
     if err or not result: return "0"
     return sci_to_str(str(D(result)/D(math.pow(10, assets['ong']['decimal']))))
 
-get_now_timestamp = lambda:int(datetime.datetime.utcnow().timestamp())
+get_now_timestamp = lambda:int(datetime.datetime.now().timestamp())
 
 async def get_unbound_offset(request, address):
     #756e626f756e6454696d654f6666736574 = unboundTimeOffset
@@ -177,7 +177,7 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
     transaction = Tool.transfer_ontology(assetId, source, dests[0], amounts[0], ad)
     result,msg = True,''
     if result:
-        return {'result':True, 'transaction':transaction}
+        return {'result':True, 'sigdata':big_or_little(Tool.compute_txid(transaction)), 'transaction':transaction}
     return {'result':False, 'error':msg}
 
 @post('/{net}/ong')
@@ -190,7 +190,8 @@ async def broadcast_ont(net, request, *, publicKey, signature, transaction):
     #params validation
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
-    result,msg = Tool.verify(publicKey, signature, transaction)
+    sigdata = big_or_little(Tool.compute_txid(transaction))
+    result,msg = Tool.verify(publicKey, signature, sigdata)
     if not result: return {'result':False, 'error':msg}
     tx = Tool.get_transaction_ontology(publicKey, signature, transaction)
     logging.info('tx:\n%s\n' % tx)

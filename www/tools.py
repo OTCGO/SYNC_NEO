@@ -65,6 +65,7 @@ class Tool:
 
     @staticmethod
     def decimal_to_hex(ds, length=8, decimals=8):
+        if 1 == decimals: decimals = 0
         hex_str = hex(int(ds*D(math.pow(10,decimals))))[2:]
         if len(hex_str)%2:
             hex_str = '0' + hex_str
