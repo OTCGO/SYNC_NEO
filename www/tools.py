@@ -194,6 +194,31 @@ class Tool:
             return tx, True, ''
         return '', False, 'No Gas'
 
+    @classmethod
+    def ong_claim_transaction(cls, address, amount):
+        if D(amount):
+            mysh = cls.address_to_scripthash(address)
+            ontsh = '0000000000000000000000000000000000000001'
+            apphash = '0000000000000000000000000000000000000002'
+            s = '00'    #version
+            s += 'd1'   #TransactionType
+            s += cls.get_random_byte_str(4) #Nonce
+            s += '0000000000000000'        #GasPrice
+            s += '3075000000000000'        #GasLimit
+            s += mysh                      #Payer
+            script = '00c66b14' + mysh + '6a7cc814' + ontsh + '6a7cc814' + mysh + '6a7cc8'
+            fa = cls.decimal_to_hex(D(amount), 8, 9)
+            faLen = hex(len(fa)//2)[2:]
+            if 1 == len(faLen) % 2:
+                faLen = '0' + faLen
+            script += faLen + fa + '6a7cc86c' + '0c7472616e7366657246726f6d' + '14' + apphash + '0068164f6e746f6c6f67792e4e61746976652e496e766f6b65'
+            scriptLen = hex(len(script)//2)[2:]
+            if 1 == len(scriptLen) % 2:
+                scriptLen = '0' + scriptLen
+            s += scriptLen + script + '00'
+            return s, True, ''
+        return '', False, 'No Gas'
+
     @staticmethod
     async def compute_gas(height,old_claims,db):
         if not old_claims: old_claims = [] 

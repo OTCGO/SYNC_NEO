@@ -183,7 +183,15 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
 @post('/{net}/ong')
 async def ong(net, request, *, publicKey, **kw):
     #params validation
-    pass
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
+    #get gas
+    address = Tool.cpubkey_to_address(publicKey)
+    amount = await get_unclaim_ong(request, address)
+    tx,result,msg = Tool.ong_claim_transaction(address, amount)
+    if result:
+        return {'result':True, 'transaction':tx, 'sigdata':big_or_little(Tool.compute_txid(tx))}
+    return {'result':False, 'error':msg}
 
 @post('/{net}/broadcast/ont')
 async def broadcast_ont(net, request, *, publicKey, signature, transaction):
