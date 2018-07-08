@@ -192,6 +192,7 @@ def index(request):
             'ref':{
                 'How to transfer?':'http://note.youdao.com/noteshare?id=b60cc93fa8e8804394ade199c52d6274',
                 'How to claim GAS?':'http://note.youdao.com/noteshare?id=c2b09b4fa26d59898a0f968ccd1652a0',
+                'How to claim ONG?':'http://note.youdao.com/noteshare?id=96992980cb8b5c6210a5b79478b3111d',
                 'Source Code':'https://github.com/OTCGO/SYNC_NEO/',
                 },
             }
