@@ -217,7 +217,7 @@ class Tool:
                 scriptLen = '0' + scriptLen
             s += scriptLen + script + '00'
             return s, True, ''
-        return '', False, 'No Gas'
+        return '', False, 'No Ong'
 
     @staticmethod
     async def compute_gas(height,old_claims,db):
