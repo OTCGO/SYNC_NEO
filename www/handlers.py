@@ -247,14 +247,15 @@ async def address(net, address, request):
             get_all_utxo(request,address),
             get_multi_nep5_balance(request, address, nep5),
             get_ont_balance(request, address))
-    result['utxo'],result['balances'] = aresult[0], aresult[1]
-    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
-    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
+    result['utxo'] = aresult[0]
     for k,v in result['utxo'].items():
         result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
     else:
         if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
         if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
+    result['balances'].update(aresult[1])
+    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
+    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
     return result
 
 @get('/{net}/claim/{address}')
