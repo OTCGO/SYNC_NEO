@@ -141,6 +141,7 @@ async def get_all_nep5(request):
         doc['id'] = doc['_id']
         del doc['_id']
         result.append(doc)
+    result.sort(key=lambda k:(k.get('symbol','zzz')))
     return result
 
 async def get_all_ontology(request):
