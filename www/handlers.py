@@ -253,8 +253,8 @@ async def address(net, address, request):
     else:
         if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
         if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
-        if SEAS[net][2:] not in request['balances'].keys(): result['balances'][SEAS[net][2:]] = "0"
-        if SEAC[net][2:] not in request['balances'].keys(): result['balances'][SEAC[net][2:]] = "0"
+        if SEAS[net][2:] not in result['balances'].keys(): result['balances'][SEAS[net][2:]] = "0"
+        if SEAC[net][2:] not in result['balances'].keys(): result['balances'][SEAC[net][2:]] = "0"
     result['balances'].update(aresult[1])
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
