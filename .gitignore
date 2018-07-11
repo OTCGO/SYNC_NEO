@@ -90,3 +90,4 @@ ENV/
 
 # Pipenv
 Pipfile.lock
+dump.rdb

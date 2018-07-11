@@ -13,10 +13,15 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
+from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
+from ont_handlers import assets as ONT_ASSETS
 
 
 def valid_net(net, request):
     return net == request.app['net']
+
+def valid_platform(platform):
+    return platform in ['ios','android']
 
 def valid_asset(asset):
     if len(asset) in [40,64]: return True
@@ -67,21 +72,26 @@ async def send_raw_transaction(tx, request):
             return False, j['error']['message']
         return j['result'],''
 
-async def get_nep5_asset_balance(request, address, asset):
+async def get_nep5_asset_balance(request, address, asset, decimals=8):
     result = await get_rpc(request, 'invokefunction',
             [asset, "balanceOf", [{"type":"Hash160","value":big_or_little(Tool.address_to_scripthash(address))}]])
     if result and "HALT, BREAK" == result["state"]:
         hex_str = result['stack'][0]['value']
-        if hex_str: return Tool.hex_to_num_str(hex_str)
+        if hex_str: return Tool.hex_to_num_str(hex_str, decimals)
         return '0'
     return '0'
 
-async def get_multi_nep5_balance(request, address, asset_list):
+async def get_multi_nep5_balance(request, address, assets):
     result = {}
+    for asset in assets:
+        try:
+            asset['decimals'] = int(asset['decimals'])
+        except:
+            asset['decimals'] = 8
     nep5_result = await asyncio.gather(
-            *[get_nep5_asset_balance(request, address, asset) for asset in asset_list])
-    for i in range(len(asset_list)):
-        result[asset_list[i]] = nep5_result[i]
+            *[get_nep5_asset_balance(request, address, asset["id"], asset['decimals']) for asset in assets])
+    for i in range(len(assets)):
+        result[assets[i]['id']] = nep5_result[i]
     return result
 
 async def get_utxo(request, address, asset):
@@ -131,11 +141,25 @@ async def get_all_nep5(request):
         doc['id'] = doc['_id']
         del doc['_id']
         result.append(doc)
+    result.sort(key=lambda k:(k.get('symbol','zzz')))
+    return result
+
+async def get_all_ontology(request):
+    result = []
+    cursor = request.app['db'].assets.find({'type':'ONTOLOGY'})
+    for doc in await cursor.to_list(None):
+        doc['id'] = doc['_id']
+        del doc['_id']
+        result.append(doc)
     return result
 
 async def get_all_asset(request):
-    results = await asyncio.gather(get_asset_state(request), get_all_global(request), get_all_nep5(request))
-    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2]}
+    results = await asyncio.gather(
+            get_asset_state(request),
+            get_all_global(request),
+            get_all_nep5(request),
+            get_all_ontology(request))
+    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2], 'ONTOLOGY':results[3]}
 
 async def get_an_asset(id, request):
     return await request.app['db'].assets.find_one({'_id':id}) 
@@ -146,21 +170,30 @@ def index(request):
             'GET':[
                 '/',
                 '/{net}/height',
+                '/{net}/height/ont',
                 '/{net}/block/{block}',
+                '/{net}/block/ont/{block}',
                 '/{net}/transaction/{txid}',
+                '/{net}/transaction/ont/{txid}',
                 '/{net}/claim/{address}',
+                '/{net}/claim/ont/{address}',
                 '/{net}/address/{address}',
+                '/{net}/address/ont/{address}',
                 '/{net}/asset?id={assetid}',
                 '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
                 ],
             'POST':[
                 '/{net}/gas',
+                '/{net}/ong',
                 '/{net}/transfer',
+                '/{net}/transfer/ont',
                 '/{net}/broadcast',
+                '/{net}/broadcast/ont',
                 ],
             'ref':{
                 'How to transfer?':'http://note.youdao.com/noteshare?id=b60cc93fa8e8804394ade199c52d6274',
                 'How to claim GAS?':'http://note.youdao.com/noteshare?id=c2b09b4fa26d59898a0f968ccd1652a0',
+                'How to claim ONG?':'http://note.youdao.com/noteshare?id=96992980cb8b5c6210a5b79478b3111d',
                 'Source Code':'https://github.com/OTCGO/SYNC_NEO/',
                 },
             }
@@ -210,16 +243,19 @@ async def address(net, address, request):
     if not Tool.validate_address(address): return {'error':'wrong address'}
     result = {'_id':address,'balances':{}}
     nep5 = await get_all_nep5(request)
-    nep5_keys = [n['id'] for n in nep5]
     aresult = await asyncio.gather(
             get_all_utxo(request,address),
-            get_multi_nep5_balance(request, address, nep5_keys))
-    result['utxo'],result['balances'] = aresult[0], aresult[1]
+            get_multi_nep5_balance(request, address, nep5),
+            get_ont_balance(request, address))
+    result['utxo'] = aresult[0]
     for k,v in result['utxo'].items():
         result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
     else:
         if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
         if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
+    result['balances'].update(aresult[1])
+    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
+    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
     return result
 
 @get('/{net}/claim/{address}')
@@ -261,6 +297,17 @@ async def history(net, address, request, *, asset=0, index=1, length=20):
         raw_utxo.append(document)
     return {'result':raw_utxo}
 
+@get('/{net}/version/{platform}')
+async def version(net, platform, request):
+    if not valid_net(net, request): return {'error':'wrong net'}
+    platform = platform.lower()
+    if not valid_platform(platform): return {'error':'wrong platform'}
+    info = await request.app['db'].state.find_one({'_id':platform})
+    if info:
+        del info['_id']
+        return {'result':True, 'version':info}
+    return {'result':False, 'error':'not exist'}
+
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     #params validation
@@ -290,9 +337,9 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     #check balance && transaction
     tran_num = sum(amounts)
     if nep5_asset:
-        balance = D(await get_nep5_asset_balance(request, source, assetId))
+        balance = D(await get_nep5_asset_balance(request, source, assetId, ad))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
-        transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0])
+        transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0], ad)
         result,msg = True,''
     if global_asset:
         utxo = await get_utxo(request, source, assetId)

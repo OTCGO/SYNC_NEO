@@ -3,9 +3,8 @@
 # flow@蓝鲸淘
 # Licensed under the MIT License.
 
-import os
 import sys
-import time
+import math
 import uvloop
 import asyncio
 import aiohttp
@@ -16,56 +15,9 @@ from base58 import b58encode
 import motor.motor_asyncio
 from logzero import logger
 from decimal import Decimal as D
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
-
-now = lambda:time.time()
-
-def get_mongo_uri():
-    mongo_uri    = os.environ.get('MONGOURI')
-    if mongo_uri: return mongo_uri
-    mongo_server = os.environ.get('MONGOSERVER')
-    mongo_port   = os.environ.get('MONGOPORT')
-    mongo_user   = os.environ.get('MONGOUSER')
-    mongo_pass   = os.environ.get('MONGOPASS')
-    if mongo_user and mongo_pass:
-        return 'mongodb://%s:%s@%s:%s' % (mongo_user, mongo_pass, mongo_server, mongo_port)
-    else:
-        return 'mongodb://%s:%s' % (mongo_server, mongo_port)
-
-def get_neo_uri():
-    neo_node = os.environ.get('NEONODE')
-    neo_port = os.environ.get('NEOPORT')
-    return 'http://%s:%s' % (neo_node, neo_port)
-
-get_mongo_db = lambda:os.environ.get('MONGODB')
-
-get_tasks = lambda:os.environ.get('TASKS')
-
-def big_or_little(arr):
-    '''大小端互转'''
-    arr = bytearray(str(arr),'ascii')
-    length = len(arr)
-    for idx in range(length//2):
-        if idx%2 == 0:
-            arr[idx], arr[length-2-idx] = arr[length-2-idx], arr[idx]
-        else:
-            arr[idx], arr[length - idx] = arr[length - idx], arr[idx]
-    return arr.decode('ascii')
-
-def sci_to_str(sciStr):
-    '''科学计数法转换成字符串'''
-    assert type('str')==type(sciStr),'invalid format'
-    if 'E' not in sciStr:
-        return sciStr
-    s = '%.8f' % float(sciStr)
-    while '0' == s[-1] and '.' in s:
-        s = s[:-1]
-    if '.' == s[-1]:
-        s = s[:-1]
-    return s
+from Config import Config as C
+from CommonTool import CommonTool as CT
 
 
 class Crawler:
@@ -78,16 +30,17 @@ class Crawler:
         self.processing = []
         self.cache = {}
         self.cache_log = {}
+        self.cache_decimals = {}
         conn = aiohttp.TCPConnector(limit=10000)
         self.session = aiohttp.ClientSession(loop=loop,connector=conn)
-        self.net = os.environ.get('NET')
-        self.super_node_uri = os.environ.get('SUPERNODE')
+        self.net = C.get_net()
+        self.super_node_uri = C.get_super_node()
 
-    def hex_to_num_str(self, fixed8_str):
-        hex_str = big_or_little(fixed8_str)
+    def hex_to_num_str(self, fixed8_str, decimals=8):
+        hex_str = CT.big_or_little(fixed8_str)
         if not hex_str: return '0'
         d = D(int('0x' + hex_str, 16))
-        return sci_to_str(str(d/100000000))
+        return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
 
     @staticmethod
     def hash256(b):
@@ -99,6 +52,26 @@ class Crawler:
         result = b58encode(tmp + cls.hash256(tmp)[:4])
         if isinstance(result, bytes): result = result.decode('utf8')
         return result
+
+    async def get_invokefunction(self, contract, func):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to get invokefunction')
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']
+
+    async def get_decimals(self, contract):
+        d = await self.get_invokefunction(contract, 'decimals')
+        if 'state' in d.keys() and d['state'].startswith('HALT') and d['stack'][0]['value']:
+            return int(d['stack'][0]['value'])
+        return 8
+
+    async def get_cache_decimals(self, contract):
+        if contract not in self.cache_decimals.keys():
+            self.cache_decimals[contract] = await self.get_decimals(contract)
+        return self.cache_decimals[contract]
 
     async def get_block(self, height):
         async with self.session.post(self.neo_uri, json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
@@ -187,7 +160,7 @@ class Crawler:
 
         while True:
             current_height = await self.get_block_count()
-            time_a = now()
+            time_a = CT.now()
             if self.start < current_height:
                 stop = self.start + self.max_tasks
                 if stop >= current_height:
@@ -229,7 +202,7 @@ class Crawler:
                                             isinstance(n['state']['value'],list) and \
                                             4 == len(n['state']['value']) and \
                                             '7472616e73666572' == n['state']['value'][0]['value']:
-                                        value = self.hex_to_num_str(n['state']['value'][3]['value'])
+                                        value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
                                         from_sh = n['state']['value'][1]['value']
                                         if from_sh:
                                             from_address = self.scripthash_to_address(from_sh)
@@ -243,7 +216,7 @@ class Crawler:
                 if vouts:
                     await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
 
-                time_b = now()
+                time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
                 await self.update_history_state(max_height)
@@ -259,12 +232,12 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    START_TIME = now()
+    START_TIME = CT.now()
     logger.info('STARTING...')
-    mongo_uri = get_mongo_uri()
-    neo_uri = get_neo_uri()
-    mongo_db = get_mongo_db()
-    tasks = get_tasks()
+    mongo_uri = C.get_mongo_uri()
+    neo_uri = C.get_neo_uri()
+    mongo_db = C.get_mongo_db()
+    tasks = C.get_tasks()
     loop = asyncio.get_event_loop()
     crawler = Crawler(mongo_uri, mongo_db, neo_uri, loop, tasks)
     loop.run_until_complete(crawler.crawl())

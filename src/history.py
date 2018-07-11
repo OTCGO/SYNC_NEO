@@ -3,9 +3,7 @@
 # flow@蓝鲸淘
 # Licensed under the MIT License.
 
-import os
 import sys
-import time
 import uvloop
 import asyncio
 import aiohttp
@@ -13,45 +11,10 @@ import datetime
 import motor.motor_asyncio
 from logzero import logger
 from decimal import Decimal as D
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+from Config import Config as C
+from CommonTool import CommonTool as CT
 
-
-now = lambda:time.time()
-
-def get_mongo_uri():
-    mongo_uri    = os.environ.get('MONGOURI')
-    if mongo_uri: return mongo_uri
-    mongo_server = os.environ.get('MONGOSERVER')
-    mongo_port   = os.environ.get('MONGOPORT')
-    mongo_user   = os.environ.get('MONGOUSER')
-    mongo_pass   = os.environ.get('MONGOPASS')
-    if mongo_user and mongo_pass:
-        return 'mongodb://%s:%s@%s:%s' % (mongo_user, mongo_pass, mongo_server, mongo_port)
-    else:
-        return 'mongodb://%s:%s' % (mongo_server, mongo_port)
-
-def get_neo_uri():
-    neo_node = os.environ.get('NEONODE')
-    neo_port = os.environ.get('NEOPORT')
-    return 'http://%s:%s' % (neo_node, neo_port)
-
-get_mongo_db = lambda:os.environ.get('MONGODB')
-
-get_tasks = lambda:os.environ.get('TASKS')
-
-def sci_to_str(sciStr):
-    '''科学计数法转换成字符串'''
-    assert type('str')==type(sciStr),'invalid format'
-    if 'E' not in sciStr:
-        return sciStr
-    s = '%.8f' % float(sciStr)
-    while '0' == s[-1] and '.' in s:
-        s = s[:-1]
-    if '.' == s[-1]:
-        s = s[:-1]
-    return s
 
 class Crawler:
     def __init__(self, mongo_uri, mongo_db, neo_uri, loop, tasks='1000'):
@@ -152,7 +115,7 @@ class Crawler:
         
         while True:
             current_height = await self.get_block_count()
-            time_a = now()
+            time_a = CT.now()
             if self.start < current_height:
                 stop = self.start + self.max_tasks
                 if stop >= current_height:
@@ -188,7 +151,7 @@ class Crawler:
                             utxo = self.cache_utxo[vin['txid']][vin['vout']]
                             key = utxo['asset'] + '_' + utxo['address']
                             if key in utxo_dict.keys():
-                                utxo_dict[key]['value'] = sci_to_str(str(D(utxo_dict[key]['value'])+D(utxo['value'])))
+                                utxo_dict[key]['value'] = CT.sci_to_str(str(D(utxo_dict[key]['value'])+D(utxo['value'])))
                             else:
                                 utxo_dict[key] = utxo
 
@@ -196,7 +159,7 @@ class Crawler:
                         for vout in tx['vout']:
                             key = vout['asset'] + '_' + vout['address']
                             if key in vout_dict.keys():
-                                vout_dict[key]['value'] = sci_to_str(str(D(vout_dict[key]['value'])+D(vout['value'])))
+                                vout_dict[key]['value'] = CT.sci_to_str(str(D(vout_dict[key]['value'])+D(vout['value'])))
                             else:
                                 vout_dict[key] = vout
 
@@ -211,7 +174,7 @@ class Crawler:
                             key = utxo['asset'] + '_' + utxo['address']
                             if key in vout_dict.keys():
                                 if D(utxo['value']) > D(vout_dict[key]['value']):
-                                    utxo['value'] = sci_to_str(str(D(utxo['value'])-D(vout_dict[key]['value'])))
+                                    utxo['value'] = CT.sci_to_str(str(D(utxo['value'])-D(vout_dict[key]['value'])))
                                     del vout_dict[key]
                             vins.append([utxo, tx['txid'], i, block_time])
 
@@ -225,7 +188,7 @@ class Crawler:
                 if vouts:
                     await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
 
-                time_b = now()
+                time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
                 await self.update_history_state(max_height)
@@ -241,12 +204,12 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    START_TIME = now()
+    START_TIME = CT.now()
     logger.info('STARTING...')
-    mongo_uri = get_mongo_uri()
-    neo_uri = get_neo_uri()
-    mongo_db = get_mongo_db()
-    tasks = get_tasks()
+    mongo_uri = C.get_mongo_uri()
+    neo_uri = C.get_neo_uri()
+    mongo_db = C.get_mongo_db()
+    tasks = C.get_tasks()
     loop = asyncio.get_event_loop()
     crawler = Crawler(mongo_uri, mongo_db, neo_uri, loop, tasks)
     try:

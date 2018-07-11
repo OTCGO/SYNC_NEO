@@ -32,6 +32,11 @@ def get_neo_uri():
     neo_port = os.environ.get('NEOPORT')
     return 'http://%s:%s' % (neo_node, neo_port)
 
+def get_ont_uri():
+    ont_node = os.environ.get('ONTNODE')
+    ont_port = os.environ.get('ONTPORT')
+    return 'http://%s:%s' % (ont_node, ont_port)
+
 def get_redis_db(net):
     if 'testnet' == net: return '1'
     if 'mainnet' == net: return '2'
@@ -43,6 +48,7 @@ get_listen_port = lambda:os.environ.get('LISTENPORT')
 get_net = lambda:os.environ.get('NET')
 get_redis_uri = lambda:os.environ.get('REDISURI')
 get_redis_pass = lambda:os.environ.get('REDISPASS')
+get_ont_genesis_block_timestamp = lambda:int(os.environ.get('ONTGENESISBLOCKTIMESTAMP'))
 
 
 async def update_height(db, redis):
@@ -123,6 +129,7 @@ async def init(loop):
     ])
     mongo_uri = get_mongo_uri()
     neo_uri = get_neo_uri()
+    ont_uri = get_ont_uri()
     mongo_db = get_mongo_db()
     listen_ip = get_listen_ip()
     listen_port = get_listen_port()
@@ -130,11 +137,13 @@ async def init(loop):
     app['db'] = app['client'][mongo_db]
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
+    app['ont_uri'] = ont_uri
     app['net'] = get_net()
     redis_pass = get_redis_pass()
     if not redis_pass:redis_pass=None
     app['redis'] = await aioredis.create_redis(
             get_redis_uri() + '/' + get_redis_db(app['net']) + '?encoding=utf-8', password=redis_pass)
+    app['ont_genesis_block_timestamp'] = get_ont_genesis_block_timestamp()
     scheduler = AsyncIOScheduler(job_defaults = {
                     'coalesce': True,
                     'max_instances': 1,

@@ -6,13 +6,12 @@ import binascii
 import bitcoin
 import asyncio
 import hashlib
+import math
 from random import randint
 
 def sci_to_str(sciStr):
     '''科学计数法转换成字符串'''
     assert type('str')==type(sciStr),'invalid format'
-    if 'E' not in sciStr:
-        return sciStr
     s = '%.8f' % float(sciStr)
     while '0' == s[-1] and '.' in s:
         s = s[:-1]
@@ -63,8 +62,9 @@ class Tool:
         return False
 
     @staticmethod
-    def decimal_to_hex(ds, length=8):
-        hex_str = hex(int(ds*D('100000000')))[2:]
+    def decimal_to_hex(ds, length=8, decimals=8):
+        if 1 == decimals: decimals = 0
+        hex_str = hex(int(ds*D(math.pow(10,decimals))))[2:]
         if len(hex_str)%2:
             hex_str = '0' + hex_str
         for i in range(length - len(hex_str)//2):
@@ -88,10 +88,10 @@ class Tool:
         return ''.join([cls.get_random_byte() for i in range(0,num)])
 
     @staticmethod
-    def hex_to_num_str(fixed8_str):
+    def hex_to_num_str(fixed8_str, decimals=8):
         hex_str = big_or_little(fixed8_str)
         d = D(int('0x' + hex_str, 16))
-        return sci_to_str(str(d/100000000))
+        return sci_to_str(str(d/D(math.pow(10, decimals))))
 
     @staticmethod
     def address_to_scripthash(address):
@@ -192,6 +192,31 @@ class Tool:
             return tx, True, ''
         return '', False, 'No Gas'
 
+    @classmethod
+    def ong_claim_transaction(cls, address, amount):
+        if D(amount):
+            mysh = cls.address_to_scripthash(address)
+            ontsh = '0000000000000000000000000000000000000001'
+            apphash = '0000000000000000000000000000000000000002'
+            s = '00'    #version
+            s += 'd1'   #TransactionType
+            s += cls.get_random_byte_str(4) #Nonce
+            s += '0000000000000000'        #GasPrice
+            s += '3075000000000000'        #GasLimit
+            s += mysh                      #Payer
+            script = '00c66b14' + mysh + '6a7cc814' + ontsh + '6a7cc814' + mysh + '6a7cc8'
+            fa = cls.decimal_to_hex(D(amount), 8, 9)
+            faLen = hex(len(fa)//2)[2:]
+            if 1 == len(faLen) % 2:
+                faLen = '0' + faLen
+            script += faLen + fa + '6a7cc86c' + '0c7472616e7366657246726f6d' + '14' + apphash + '0068164f6e746f6c6f67792e4e61746976652e496e766f6b65'
+            scriptLen = hex(len(script)//2)[2:]
+            if 1 == len(scriptLen) % 2:
+                scriptLen = '0' + scriptLen
+            s += scriptLen + script + '00'
+            return s, True, ''
+        return '', False, 'No Ong'
+
     @staticmethod
     async def compute_gas(height,old_claims,db):
         if not old_claims: old_claims = [] 
@@ -252,13 +277,13 @@ class Tool:
         return base
 
     @classmethod
-    def transfer_nep5(cls,apphash,source,dest,value):
+    def transfer_nep5(cls,apphash,source,dest,value,decimals=8):
         '''
         构建NEP5代币转账InvocationTransaction
         '''
         s = 'd101'
         script = ''
-        fa = cls.decimal_to_hex(value)
+        fa = cls.decimal_to_hex(value, 8, decimals)
         faLen = hex(len(fa)//2)[2:]
         if 1 == len(faLen) % 2:
             faLen = '0' + faLen
@@ -267,6 +292,29 @@ class Tool:
         if 1 == len(scriptLen) % 2:
             scriptLen = '0' + scriptLen
         s += scriptLen + script + '0000000000000000' + '0120' + cls.address_to_scripthash(source) + '0000'
+        return s
+
+    @classmethod
+    def transfer_ontology(cls,apphash,source,dest,value,decimals):
+        '''
+        构建ontology代币转账InvocationTransaction
+        '''
+        s = '00'    #version
+        s += 'd1'   #TransactionType
+        s += cls.get_random_byte_str(4) #Nonce
+        s += '0000000000000000'        #GasPrice
+        s += '3075000000000000'        #GasLimit
+        s += cls.address_to_scripthash(source) #Payer
+        script = '00c66b14' + cls.address_to_scripthash(source) + '6a7cc814' + cls.address_to_scripthash(dest) + '6a7cc8'
+        fa = cls.decimal_to_hex(value, 8, decimals)
+        faLen = hex(len(fa)//2)[2:]
+        if 1 == len(faLen) % 2:
+            faLen = '0' + faLen
+        script += faLen + fa + '6a7cc8' + '6c51c1' + '087472616e73666572' + '14' + apphash + '0068164f6e746f6c6f67792e4e61746976652e496e766f6b65'
+        scriptLen = hex(len(script)//2)[2:]
+        if 1 == len(scriptLen) % 2:
+            scriptLen = '0' + scriptLen
+        s += scriptLen + script + '00'
         return s
 
     @classmethod
@@ -313,6 +361,10 @@ class Tool:
 
     @staticmethod
     def get_transaction(cpubkey, signature, transaction):
+        return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
+
+    @staticmethod
+    def get_transaction_ontology(cpubkey, signature, transaction):
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
 
     @classmethod
