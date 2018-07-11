@@ -8,7 +8,7 @@ from pymongo import DESCENDING
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO, GAS, GLOBAL_TYPES
+from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
@@ -253,6 +253,8 @@ async def address(net, address, request):
     else:
         if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
         if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
+        if SEAS[net][2:] not in request['balances'].keys(): result['balances'][SEAS[net][2:]] = "0"
+        if SEAC[net][2:] not in request['balances'].keys(): result['balances'][SEAC[net][2:]] = "0"
     result['balances'].update(aresult[1])
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
