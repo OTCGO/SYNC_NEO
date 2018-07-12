@@ -188,7 +188,7 @@ async def ong(net, request, *, publicKey, **kw):
     #get gas
     address = Tool.cpubkey_to_address(publicKey)
     amount = await get_unclaim_ong(request, address)
-    tx,result,msg = Tool.ong_claim_transaction(address, amount)
+    tx,result,msg = Tool.ong_claim_transaction(address, amount, net)
     if result:
         return {'result':True, 'transaction':tx, 'sigdata':big_or_little(Tool.compute_txid(tx))}
     return {'result':False, 'error':msg}
