@@ -174,7 +174,7 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
     tran_num = sum(amounts)
     balance = D(await get_ont_balance(request, source, aname))
     if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
-    transaction = Tool.transfer_ontology(assetId, source, dests[0], amounts[0], ad)
+    transaction = Tool.transfer_ontology(net, assetId, source, dests[0], amounts[0], ad)
     result,msg = True,''
     if result:
         return {'result':True, 'sigdata':big_or_little(Tool.compute_txid(transaction)), 'transaction':transaction}

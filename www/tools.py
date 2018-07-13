@@ -299,15 +299,19 @@ class Tool:
         return s
 
     @classmethod
-    def transfer_ontology(cls,apphash,source,dest,value,decimals):
+    def transfer_ontology(cls,net,apphash,source,dest,value,decimals):
         '''
         构建ontology代币转账InvocationTransaction
         '''
         s = '00'    #version
         s += 'd1'   #TransactionType
         s += cls.get_random_byte_str(4) #Nonce
-        s += '0000000000000000'        #GasPrice
-        s += '3075000000000000'        #GasLimit
+        if 'testnet' == net:
+            s += '0000000000000000'        #GasPrice
+            s += '3075000000000000'        #GasLimit
+        else:
+            s += 'f401000000000000'        #GasPrice
+            s += '204e000000000000'        #GasLimit
         s += cls.address_to_scripthash(source) #Payer
         script = '00c66b14' + cls.address_to_scripthash(source) + '6a7cc814' + cls.address_to_scripthash(dest) + '6a7cc8'
         fa = cls.decimal_to_hex(value, 8, decimals)
