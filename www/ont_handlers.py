@@ -193,13 +193,12 @@ async def ong(net, request, *, publicKey, **kw):
         return {'result':True, 'transaction':tx, 'sigdata':big_or_little(Tool.compute_txid(tx))}
     return {'result':False, 'error':msg}
 
-@get('/{net}/ong/{publicKey}')
-async def get_ong(net, publicKey, request):
+@get('/{net}/ong/{address}')
+async def get_ong(net, address, request):
     #params validation
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
-    if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
-    #get gas
-    address = Tool.cpubkey_to_address(publicKey)
+    if not Tool.validate_address(address): return {'error':'wrong address'}
+    #get ong 
     amount = await get_unclaim_ong(request, address)
     tx,result,msg = Tool.ong_claim_transaction(address, amount, net)
     if result:
