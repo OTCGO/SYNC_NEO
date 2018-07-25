@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
-from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
+from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, get_ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
 from ont_handlers import assets as ONT_ASSETS
 
 
