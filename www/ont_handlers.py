@@ -173,7 +173,12 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
     #check balance && transaction
     tran_num = sum(amounts)
     balance = D(await get_ont_balance(request, source, aname))
-    if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
+    if 'ong' == aname:
+        if balance < tran_num + D('0.01'): return {'result':False, 'error':'insufficient balance'}
+    else:
+        ong_balance = D(await get_ont_balance(request, source, 'ong'))
+        if ong_balance < D('0.01'): return {'result':False, 'error':'insufficient fee'}
+        if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
     transaction = Tool.transfer_ontology(net, assetId, source, dests[0], amounts[0], ad)
     result,msg = True,''
     if result:
@@ -187,6 +192,8 @@ async def ong(net, request, *, publicKey, **kw):
     if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
     #get gas
     address = Tool.cpubkey_to_address(publicKey)
+    ong_balance = D(await get_ont_balance(request, address, 'ong'))
+    if ong_balance < D('0.01'): return {'result':False, 'error':'insufficient fee'}
     amount = await get_unclaim_ong(request, address)
     tx,result,msg = Tool.ong_claim_transaction(address, amount, net)
     if result:
@@ -199,6 +206,8 @@ async def get_ong(net, address, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     #get ong 
+    ong_balance = D(await get_ont_balance(request, address, 'ong'))
+    if ong_balance < D('0.01'): return {'result':False, 'error':'insufficient fee'}
     amount = await get_unclaim_ong(request, address)
     tx,result,msg = Tool.ong_claim_transaction(address, amount, net)
     if result:
