@@ -322,6 +322,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     nep5_asset = global_asset = False
     if 40 == len(assetId): nep5_asset = True
     if 64 == len(assetId): global_asset = True
+    if 'a4f408df2a1ec2a950ec5fd06d7b9dc5f83b9e73' == assetId: return {'result':False, 'error':'not support SDT'}
     ad = get_asset_decimal(asset)
     dests,amounts = dests.split(','), amounts.split(',')
     ld,la = len(dests), len(amounts)
