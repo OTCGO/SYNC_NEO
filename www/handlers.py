@@ -8,12 +8,12 @@ from pymongo import DESCENDING
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO, GAS, GLOBAL_TYPES
+from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
-from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
+from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, get_ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
 from ont_handlers import assets as ONT_ASSETS
 
 
@@ -39,6 +39,14 @@ def valid_page_arg(index, length):
     if index <= 0: return False, {'error':'wrong index'}
     if length <= 0 or length>100: return False, {'error':'wrong length'}
     return True, {'index':index, 'length':length}
+
+def valid_domain(domain, request):
+    domain = domain.split(".")
+    if len(domain) < 2: return False
+    if not domain[0]: return False
+    if 'testnet' == request.app['net'] and domain[-1] not in ["test"]: return False
+    if 'mainnet' == request.app['net'] and domain[-1] not in ["neo"]: return False
+    return True
 
 def get_asset_decimal(asset):
     if asset['type'] in GLOBAL_TYPES: return asset["precision"]
@@ -80,6 +88,14 @@ async def get_nep5_asset_balance(request, address, asset, decimals=8):
         if hex_str: return Tool.hex_to_num_str(hex_str, decimals)
         return '0'
     return '0'
+
+async def get_resolve_address(resolve_invoke, request):
+    result = await get_rpc(request, 'invokescript', [resolve_invoke])
+    if result and "HALT, BREAK" == result["state"]:
+        hex_str = result['stack'][0]['value']
+        if '00' != hex_str: return Tool.hex_to_string(hex_str)
+        return ''
+    return ''
 
 async def get_multi_nep5_balance(request, address, assets):
     result = {}
@@ -181,6 +197,7 @@ def index(request):
                 '/{net}/address/ont/{address}',
                 '/{net}/asset?id={assetid}',
                 '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
+                '/{net}/resolve/{domain}',
                 ],
             'POST':[
                 '/{net}/gas',
@@ -253,6 +270,8 @@ async def address(net, address, request):
     else:
         if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
         if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
+        if SEAS[net][2:] not in result['balances'].keys(): result['balances'][SEAS[net][2:]] = "0"
+        if SEAC[net][2:] not in result['balances'].keys(): result['balances'][SEAC[net][2:]] = "0"
     result['balances'].update(aresult[1])
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
@@ -307,6 +326,15 @@ async def version(net, platform, request):
         del info['_id']
         return {'result':True, 'version':info}
     return {'result':False, 'error':'not exist'}
+
+@get('/{net}/resolve/{domain}')
+async def resolve(net, domain, request):
+    if not valid_domain(domain, request): return {'error':'wrong domain'}
+    namehash = Tool.nns_namehash(domain)
+    resolve_invoke = Tool.nns_resolve_invoke(namehash)
+    address = await get_resolve_address(resolve_invoke, request)
+    if not address: return {'error':'not resolve'}
+    return {'result':True, 'address':address}
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):

@@ -12,7 +12,7 @@ from random import randint
 def sci_to_str(sciStr):
     '''科学计数法转换成字符串'''
     assert type('str')==type(sciStr),'invalid format'
-    s = '%.8f' % float(sciStr)
+    s = '%.10f' % float(sciStr)
     while '0' == s[-1] and '.' in s:
         s = s[:-1]
     if '.' == s[-1]:
@@ -193,7 +193,7 @@ class Tool:
         return '', False, 'No Gas'
 
     @classmethod
-    def ong_claim_transaction(cls, address, amount):
+    def ong_claim_transaction(cls, address, amount, net):
         if D(amount):
             mysh = cls.address_to_scripthash(address)
             ontsh = '0000000000000000000000000000000000000001'
@@ -201,8 +201,8 @@ class Tool:
             s = '00'    #version
             s += 'd1'   #TransactionType
             s += cls.get_random_byte_str(4) #Nonce
-            s += '0000000000000000'        #GasPrice
-            s += '3075000000000000'        #GasLimit
+            s += 'f401000000000000'        #GasPrice
+            s += '204e000000000000'        #GasLimit
             s += mysh                      #Payer
             script = '00c66b14' + mysh + '6a7cc814' + ontsh + '6a7cc814' + mysh + '6a7cc8'
             fa = cls.decimal_to_hex(D(amount), 8, 9)
@@ -295,15 +295,15 @@ class Tool:
         return s
 
     @classmethod
-    def transfer_ontology(cls,apphash,source,dest,value,decimals):
+    def transfer_ontology(cls,net,apphash,source,dest,value,decimals):
         '''
         构建ontology代币转账InvocationTransaction
         '''
         s = '00'    #version
         s += 'd1'   #TransactionType
         s += cls.get_random_byte_str(4) #Nonce
-        s += '0000000000000000'        #GasPrice
-        s += '3075000000000000'        #GasLimit
+        s += 'f401000000000000'        #GasPrice
+        s += '204e000000000000'        #GasLimit
         s += cls.address_to_scripthash(source) #Payer
         script = '00c66b14' + cls.address_to_scripthash(source) + '6a7cc814' + cls.address_to_scripthash(dest) + '6a7cc8'
         fa = cls.decimal_to_hex(value, 8, decimals)
@@ -398,3 +398,21 @@ class Tool:
         except Exception as e:
             print('verify failth:%s' % e)
         return False,'failth'
+
+    @staticmethod
+    def hex_to_string(h):
+        return binascii.unhexlify(h).decode()
+
+    @staticmethod
+    def nns_namehash(domain):
+        from functools import reduce
+        domains = domain.split('.')
+        domains.reverse()
+        def hashdomain(a,b):
+            return hashlib.sha256(hashlib.sha256(b.encode()).digest()+a).digest()
+        domains[0] = hashlib.sha256(domains[0].encode()).digest()
+        return reduce(hashdomain, domains).hex()
+
+    @staticmethod
+    def nns_resolve_invoke(namehash):
+        return '0020' + namehash + '046164647253c1077265736f6c766567c72871904920c0d977326620e4754a6c11878334'

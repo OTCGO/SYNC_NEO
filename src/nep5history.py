@@ -36,6 +36,10 @@ class Crawler:
         self.net = C.get_net()
         self.super_node_uri = C.get_super_node()
 
+    def integer_to_num_str(self, int_str, decimals=8):
+        d = D(int_str)
+        return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
+
     def hex_to_num_str(self, fixed8_str, decimals=8):
         hex_str = CT.big_or_little(fixed8_str)
         if not hex_str: return '0'
@@ -194,7 +198,8 @@ class Crawler:
                         txid = tx['txid']
                         if 'InvocationTransaction' == tx['type']:
                             log = self.cache_log[txid]
-                            if 'HALT, BREAK' == log['vmstate']:
+                            if ('vmstate' in log.keys() and 'HALT, BREAK' == log['vmstate']) or ('executions' in log.keys() and 'vmstate' in log['executions'][0].keys() and 'HALT, BREAK' == log['executions'][0]['vmstate']):
+                                if 'executions' in log.keys(): log['notifications'] = log['executions'][0]['notifications']
                                 for i in range(len(log['notifications'])):
                                     n = log['notifications'][i]
                                     asset = n['contract'][2:]
@@ -202,7 +207,10 @@ class Crawler:
                                             isinstance(n['state']['value'],list) and \
                                             4 == len(n['state']['value']) and \
                                             '7472616e73666572' == n['state']['value'][0]['value']:
-                                        value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                        if 'Integer' == n['state']['value'][3]['type']:
+                                            value = self.integer_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                        else:
+                                            value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
                                         from_sh = n['state']['value'][1]['value']
                                         if from_sh:
                                             from_address = self.scripthash_to_address(from_sh)
