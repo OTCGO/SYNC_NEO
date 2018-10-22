@@ -398,3 +398,21 @@ class Tool:
         except Exception as e:
             print('verify failth:%s' % e)
         return False,'failth'
+
+    @staticmethod
+    def hex_to_string(h):
+        return binascii.unhexlify(h).decode()
+
+    @staticmethod
+    def nns_namehash(domain):
+        from functools import reduce
+        domains = domain.split('.')
+        domains.reverse()
+        def hashdomain(a,b):
+            return hashlib.sha256(hashlib.sha256(b.encode()).digest()+a).digest()
+        domains[0] = hashlib.sha256(domains[0].encode()).digest()
+        return reduce(hashdomain, domains).hex()
+
+    @staticmethod
+    def nns_resolve_invoke(namehash):
+        return '0020' + namehash + '046164647253c1077265736f6c766567c72871904920c0d977326620e4754a6c11878334'

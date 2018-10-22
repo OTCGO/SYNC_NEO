@@ -40,6 +40,14 @@ def valid_page_arg(index, length):
     if length <= 0 or length>100: return False, {'error':'wrong length'}
     return True, {'index':index, 'length':length}
 
+def valid_domain(domain, request):
+    domain = domain.split(".")
+    if len(domain) < 2: return False
+    if not domain[0]: return False
+    if 'testnet' == request.app['net'] and domain[-1] not in ["test"]: return False
+    if 'mainnet' == request.app['net'] and domain[-1] not in ["neo"]: return False
+    return True
+
 def get_asset_decimal(asset):
     if asset['type'] in GLOBAL_TYPES: return asset["precision"]
     try:
@@ -80,6 +88,14 @@ async def get_nep5_asset_balance(request, address, asset, decimals=8):
         if hex_str: return Tool.hex_to_num_str(hex_str, decimals)
         return '0'
     return '0'
+
+async def get_resolve_address(resolve_invoke, request):
+    result = await get_rpc(request, 'invokescript', [resolve_invoke])
+    if result and "HALT, BREAK" == result["state"]:
+        hex_str = result['stack'][0]['value']
+        if '00' != hex_str: return Tool.hex_to_string(hex_str)
+        return ''
+    return ''
 
 async def get_multi_nep5_balance(request, address, assets):
     result = {}
@@ -181,6 +197,7 @@ def index(request):
                 '/{net}/address/ont/{address}',
                 '/{net}/asset?id={assetid}',
                 '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
+                '/{net}/resolve/{domain}',
                 ],
             'POST':[
                 '/{net}/gas',
@@ -309,6 +326,15 @@ async def version(net, platform, request):
         del info['_id']
         return {'result':True, 'version':info}
     return {'result':False, 'error':'not exist'}
+
+@get('/{net}/resolve/{domain}')
+async def resolve(net, domain, request):
+    if not valid_domain(domain, request): return {'error':'wrong domain'}
+    namehash = Tool.nns_namehash(domain)
+    resolve_invoke = Tool.nns_resolve_invoke(namehash)
+    address = await get_resolve_address(resolve_invoke, request)
+    if not address: return {'error':'not resolve'}
+    return {'result':True, 'address':address}
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
