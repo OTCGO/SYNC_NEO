@@ -8,9 +8,11 @@ import uvloop
 import asyncio
 import aiohttp
 import datetime
+from random import randint
 import motor.motor_asyncio
 from logzero import logger
 from decimal import Decimal as D
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from Config import Config as C
 from CommonTool import CommonTool as CT
@@ -27,6 +29,30 @@ class Crawler:
         self.cache = {}
         self.cache_utxo = {}
         self.session = aiohttp.ClientSession(loop=loop)
+        self.super_node_uri = C.get_super_node()
+        self.scheduler = AsyncIOScheduler(job_defaults = {
+                        'coalesce': True,
+                        'max_instances': 1,
+                        'misfire_grace_time': 2
+            })
+        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri')
+        self.scheduler.start()
+
+    async def get_super_node_info(self):
+        async with self.session.get(self.super_node_uri) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to fetch supernode info')
+                sys.exit(1)
+            j = await resp.json()
+            return j
+
+    async def update_neo_uri(self):
+        heightA = await self.get_block_count()
+        info = await self.get_super_node_info()
+        heightB = info['height']
+        if heightA < heightB:
+            self.neo_uri = info['fast'][randint(0,len(info['fast'])-1)]
+        logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
     async def get_block(self, height):
         async with self.session.post(self.neo_uri,

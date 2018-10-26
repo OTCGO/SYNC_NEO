@@ -5,6 +5,7 @@ import aioredis
 import json
 import os
 import time
+from random import randint
 import uvloop; asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 import motor.motor_asyncio
 from datetime import datetime
@@ -37,6 +38,9 @@ def get_ont_uri():
     ont_port = os.environ.get('ONTPORT')
     return 'http://%s:%s' % (ont_node, ont_port)
 
+def get_super_node_uri():
+    return os.environ.get('SUPERNODE')
+
 def get_redis_db(net):
     if 'testnet' == net: return '1'
     if 'mainnet' == net: return '2'
@@ -50,6 +54,31 @@ get_redis_uri = lambda:os.environ.get('REDISURI')
 get_redis_pass = lambda:os.environ.get('REDISPASS')
 get_ont_genesis_block_timestamp = lambda:int(os.environ.get('ONTGENESISBLOCKTIMESTAMP'))
 
+
+async def get_block_count(app):
+    async with app['session'].post(app['neo_uri'],
+            json={'jsonrpc':'2.0','method':'getblockcount','params':[],'id':1}) as resp:
+        if 200 != resp.status:
+            logging.error('Unable to fetch blockcount')
+            sys.exit(1)
+        j = await resp.json()
+        return j['result']
+
+async def get_super_node_info(app):
+    async with app['session'].get(app['super_node_uri']) as resp:
+        if 200 != resp.status:
+            logging.error('Unable to fetch supernode info')
+            sys.exit(1)
+        j = await resp.json()
+        return j
+
+async def update_neo_uri(app):
+    heightA = await get_block_count(app)
+    info = await get_super_node_info(app)
+    heightB = info['height']
+    if heightA < heightB:
+        app['neo_uri'] = info['fast'][randint(0,len(info['fast'])-1)]
+    logging.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,app['neo_uri']))
 
 async def update_height(db, redis):
     r,old = await asyncio.gather(
@@ -133,12 +162,14 @@ async def init(loop):
     mongo_db = get_mongo_db()
     listen_ip = get_listen_ip()
     listen_port = get_listen_port()
+    super_node_uri = get_super_node_uri()
     app['client'] = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri)
     app['db'] = app['client'][mongo_db]
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
     app['ont_uri'] = ont_uri
     app['net'] = get_net()
+    app['super_node_uri'] = super_node_uri
     redis_pass = get_redis_pass()
     if not redis_pass:redis_pass=None
     app['redis'] = await aioredis.create_redis(
@@ -149,6 +180,7 @@ async def init(loop):
                     'max_instances': 1,
         })
     scheduler.add_job(update_height, 'interval', seconds=1, args=[app['db'],app['redis']], id='update_height')
+    scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri')
     scheduler._logger = logging
     scheduler.start()
     add_routes(app, 'handlers')
