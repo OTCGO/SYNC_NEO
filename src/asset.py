@@ -257,7 +257,10 @@ class Crawler:
             if func in ['name', 'symbol']:
                 asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
             if 'decimals' == func:
-                asset[func] = r['stack'][0]['value']
+                v = r['stack'][0]['value']
+                if not v:
+                    v = "0"
+                asset[func] = v
         try:
             asset['type'] = 'NEP5'
             await self.assets.update_one({'_id':_id},
