@@ -22,7 +22,7 @@ from CommonTool import CommonTool as CT
 
 class Crawler:
     def __init__(self, mongo_uri, mongo_db, neo_uri, loop, tasks='1000'):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri)
+        self.client = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri,maxPoolSize=2)
         self.state  = self.client[mongo_db].state
         self.assets = self.client[mongo_db].assets
         self.max_tasks = int(tasks)

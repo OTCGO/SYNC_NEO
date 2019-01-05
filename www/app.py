@@ -163,7 +163,7 @@ async def init(loop):
     listen_ip = get_listen_ip()
     listen_port = get_listen_port()
     super_node_uri = get_super_node_uri()
-    app['client'] = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri)
+    app['client'] = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri, maxPoolSize=200)
     app['db'] = app['client'][mongo_db]
     app['session'] = aiohttp.ClientSession(loop=loop,connector_owner=False)
     app['neo_uri'] = neo_uri
