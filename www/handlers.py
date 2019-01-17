@@ -8,7 +8,7 @@ from pymongo import DESCENDING
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC
+from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC, CSEAS, CSEAC
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from dotenv import load_dotenv, find_dotenv
@@ -26,6 +26,16 @@ def valid_platform(platform):
 def valid_asset(asset):
     if len(asset) in [40,64]: return True
     return False
+
+def valid_swap_asset(asset, net):
+    if asset not in [SEAS[net], SEAC[net]]:
+        return False
+    return True
+
+def get_swap_asset_info(asset, net):
+    if asset == SEAS[net]:
+        return big_or_little(CSEAS[net][2:]), 'SEAS'
+    return big_or_little(CSEAC[net][2:]), 'SEAC'
 
 def valid_page_arg(index, length):
     try:
@@ -335,6 +345,28 @@ async def resolve(net, domain, request):
     address = await get_resolve_address(resolve_invoke, request)
     if not address: return {'error':'not resolve'}
     return {'result':True, 'address':address}
+
+@get('/{net}/swap/{address}/{asset}')
+async def swap(net, address, asset, request):
+    if not valid_net(net, request): return {'error':'wrong net'}
+    if not Tool.validate_address(address): return {'error':'wrong address'}
+    if not asset.startswith('0x'): asset = '0x' + asset
+    if not valid_swap_asset(asset, net): return {'error':'wrong asset'}
+    sh_asset, name = get_swap_asset_info(asset, net)
+    utxo = await get_utxo(request, address, asset)
+    if not utxo: return {'result':False, 'error':'insufficient balance'}
+    if 'SEAC' == name:
+        balance = sum([D(i['value']) for i in utxo])
+    if 'SEAS' == name:
+        balance = D(utxo[0]['value'])
+    items = [Tool.scripthash_to_address(sh_asset), balance]
+    if 'SEAC' == name:
+        transaction,result,msg = Tool.transfer_global(address, utxo, items, asset)
+    if 'SEAS' == name:
+        transaction,result,msg = Tool.transfer_global(address, [utxo[0]], items, asset)
+    if result:
+        return {'result':True, 'transaction':transaction}
+    return {'result':False, 'error':msg}
 
 @post('/{net}/transfer')
 async def transfer(net, request, *, source, dests, amounts, assetId, **kw):

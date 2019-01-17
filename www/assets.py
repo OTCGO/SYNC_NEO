@@ -9,3 +9,11 @@ SEAC = {
         'mainnet':'0xa52e3e99b6c2dd2312a94c635c050b4c2bc2485fcb924eecb615852bd534a63f',
         'testnet':'0xe13440dccae716e16fc01adb3c96169d2d08d16581cad0ced0b4e193c472eac1'
         }
+CSEAS = {
+        'mainnet':'0xa68fa72edfa2d3bc336fe68ce64b33fc5987a41e',
+        'testnet':'0x88d9660441953e041a3a55a46e6d8674063d8870'
+        }
+CSEAC = {
+        'mainnet':'0x06c6d7c09f4aa9999320ce6ab56f90aa99a334b6',
+        'testnet':'0x3f10aa9f657d1966e5eaefc9368730ce4b141012'
+        }
