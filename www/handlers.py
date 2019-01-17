@@ -359,12 +359,18 @@ async def swap(net, address, asset, request):
         balance = sum([D(i['value']) for i in utxo])
     if 'SEAS' == name:
         balance = D(utxo[0]['value'])
-    items = [Tool.scripthash_to_address(sh_asset), balance]
+    items = [(Tool.scripthash_to_address(unhexlify(sh_asset)), balance)]
     if 'SEAC' == name:
         transaction,result,msg = Tool.transfer_global(address, utxo, items, asset)
     if 'SEAS' == name:
         transaction,result,msg = Tool.transfer_global(address, [utxo[0]], items, asset)
     if result:
+        itx = 'd10121000a6d696e74546f6b656e7367' + sh_asset + '0000000000000000'
+        if 'SEAC' == name:
+            itx += '0120' + Tool.address_to_scripthash(address)
+        else:
+            itx += '0220' + Tool.address_to_scripthash(address) + '20' + sh_asset
+        transaction = itx + transaction[6:]
         return {'result':True, 'transaction':transaction}
     return {'result':False, 'error':msg}
 

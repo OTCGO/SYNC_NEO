@@ -113,16 +113,16 @@ class Tool:
     @classmethod
     def scripthash_to_address(cls, sh):
         tmp = binascii.unhexlify('17' + sh.hex())
-        return b58encode(tmp + cls.hash256(tmp)[:4])
+        tmp = b58encode(tmp + cls.hash256(tmp)[:4])
+        if isinstance(tmp, bytes):
+            return tmp.decode('utf8')
+        return tmp
 
     @classmethod
     def cpubkey_to_address(cls, pubkey):
         redeem = cls.cpubkey_to_redeem(pubkey)
         scripthash = cls.redeem_to_scripthash(redeem)
-        address = cls.scripthash_to_address(scripthash)
-        if isinstance(address, bytes):
-            address = address.decode('utf8')
-        return address
+        return cls.scripthash_to_address(scripthash)
 
     @staticmethod
     def uncompress_pubkey(cpk):
