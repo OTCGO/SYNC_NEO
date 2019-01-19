@@ -364,6 +364,12 @@ class Tool:
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
 
     @staticmethod
+    def get_transaction_for_swap_seas(cpubkey, signature, transaction):
+        tx1 = transaction + '024140' + signature + '2321' + cpubkey + 'ac02000000'
+        tx2 = transaction + '02020000004140' + signature + '2321' + cpubkey + 'ac'
+        return tx1,tx2
+
+    @staticmethod
     def get_transaction_ontology(cpubkey, signature, transaction):
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
 

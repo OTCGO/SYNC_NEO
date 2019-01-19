@@ -545,11 +545,18 @@ async def broadcast(net, request, *, publicKey, signature, transaction):
     if not Tool.validate_cpubkey(publicKey): return {'result':False, 'error':'wrong publicKey'}
     result,msg = Tool.verify(publicKey, signature, transaction)
     if not result: return {'result':False, 'error':msg}
-    tx = Tool.get_transaction(publicKey, signature, transaction)
     txid = Tool.compute_txid(transaction)
-    result,msg = await send_raw_transaction(tx, request)
-    if result:
-        return {'result':True, 'txid':txid}
+    sh_seas = big_or_little(CSEAS[net][2:])
+    if transaction.startswith('d10121000a6d696e74546f6b656e7367'+sh_seas):
+        tx1,tx2 = Tool.get_transaction_for_swap_seas(publicKey, signature, transaction)
+        r = await asyncio.gather(*[send_raw_transaction(t, request) for t in [tx1, tx2]])
+        for i in range(2):
+            result,msg = r[i]
+            if result: return {'result':True, 'txid':txid}
+    else:
+        tx = Tool.get_transaction(publicKey, signature, transaction)
+        result,msg = await send_raw_transaction(tx, request)
+        if result: return {'result':True, 'txid':txid}
     return {'result':False, 'error':msg}
 
 @options('/{net}/transfer')
