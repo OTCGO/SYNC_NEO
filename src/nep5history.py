@@ -93,8 +93,10 @@ class Crawler:
 
     async def get_decimals(self, contract):
         d = await self.get_invokefunction(contract, 'decimals')
-        if 'state' in d.keys() and d['state'].startswith('HALT') and d['stack'][0]['value']:
-            return int(d['stack'][0]['value'])
+        if 'state' in d.keys() and d['state'].startswith('HALT'):
+            if d['stack'][0]['value']:
+                return int(d['stack'][0]['value'])
+            return 0
         return 8
 
     async def get_cache_decimals(self, contract):
