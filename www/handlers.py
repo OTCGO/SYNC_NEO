@@ -355,15 +355,9 @@ async def swap(net, address, asset, request):
     sh_asset, name = get_swap_asset_info(asset, net)
     utxo = await get_utxo(request, address, asset)
     if not utxo: return {'result':False, 'error':'insufficient balance'}
-    if 'SEAC' == name:
-        balance = sum([D(i['value']) for i in utxo])
-    if 'SEAS' == name:
-        balance = D(utxo[0]['value'])
+    balance = sum([D(i['value']) for i in utxo])
     items = [(Tool.scripthash_to_address(unhexlify(sh_asset)), balance)]
-    if 'SEAC' == name:
-        transaction,result,msg = Tool.transfer_global(address, utxo, items, asset[2:])
-    if 'SEAS' == name:
-        transaction,result,msg = Tool.transfer_global(address, [utxo[0]], items, asset[2:])
+    transaction,result,msg = Tool.transfer_global(address, utxo, items, asset[2:])
     if result:
         itx = 'd10121000a6d696e74546f6b656e7367' + sh_asset + '0000000000000000'
         if 'SEAC' == name:
