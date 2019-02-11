@@ -82,7 +82,7 @@ class Crawler:
         if -1 == height: return 0
         result = await self.blocks.find_one({'_id': height})
         if not result:
-            msg = 'Unable to fetch block(height=%s)'.format(height)
+            msg = 'Unable to fetch block(height={})'.format(height)
             logger.error(msg)
             raise Exception(msg)
             sys.exit(1)
@@ -157,7 +157,7 @@ class Crawler:
         _id = vin['txid'] + '_' + str(vin['vout'])
         result = await self.utxos.find_one({'_id':_id})
         if not result:
-            msg = 'Unable to fetch a spent utxo(_id=%s)'.format(_id)
+            msg = 'Unable to fetch a spent utxo(_id={})'.format(_id)
             logger.error(msg)
             raise Exception(msg)
             sys.exit(1)
