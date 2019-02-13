@@ -348,10 +348,10 @@ async def resolve(net, domain, request):
 
 @get('/{net}/swap/{address}/{asset}')
 async def swap(net, address, asset, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     if not asset.startswith('0x'): asset = '0x' + asset
-    if not valid_swap_asset(asset, net): return {'error':'wrong asset'}
+    if not valid_swap_asset(asset, net): return {'result':False, 'error':'wrong asset'}
     sh_asset, name = get_swap_asset_info(asset, net)
     utxo = await get_utxo(request, address, asset)
     if not utxo: return {'result':False, 'error':'insufficient balance'}
