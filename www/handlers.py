@@ -162,12 +162,21 @@ async def get_all_global(request):
 
 async def get_all_nep5(request):
     result = []
+    seas = {}
+    seac = {}
     cursor = request.app['db'].assets.find({'type':'NEP5'})
     for doc in await cursor.to_list(None):
         doc['id'] = doc['_id']
         del doc['_id']
-        result.append(doc)
+        if doc['symbol'] == 'SEAS':
+            seas = doc
+        elif doc['symbol'] == 'SEAC':
+            seac = doc
+        else:
+            result.append(doc)
     result.sort(key=lambda k:(k.get('symbol','zzz')))
+    if seac: result.insert(0, seac)
+    if seas: result.insert(0, seas)
     return result
 
 async def get_all_ontology(request):
