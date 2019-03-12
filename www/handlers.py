@@ -212,6 +212,7 @@ def index(request):
                 '/{net}/transaction/ont/{txid}',
                 '/{net}/claim/{address}',
                 '/{net}/claim/ont/{address}',
+                '/{net}/claim/seas/{address}',
                 '/{net}/address/{address}',
                 '/{net}/address/ont/{address}',
                 '/{net}/asset?id={assetid}',
@@ -307,6 +308,24 @@ async def claim(net, address, request):
     r = await request.app['db'].state.find_one({'_id':'height'})
     height = r['value'] + 1
     return await Tool.compute_gas(height, raw_utxo, request.app['db'])
+
+@get('/{net}/claim/seas/{address}')
+async def claim_seas(net, address, request):
+    if not valid_net(net, request): return {'error':'wrong net'}
+    if not Tool.validate_address(address): return {'error':'wrong address'}
+    assetId = CSEAS[net][2:]
+    asset = await get_an_asset(assetId, request)
+    ad = get_asset_decimal(asset)
+    balance = D(await get_nep5_asset_balance(request, address, assetId, ad))
+    if balance > 0:
+        r = await request.app['db'].state.find_one({'_id':'height'})
+        bstorage = await get_rpc(request, 'getstorage', [CSEAS[net], Tool.address_to_scripthash(address)])
+        bheight = bstorage[16:]
+        bheight = D(Tool.hex_to_num_str(bheight,0))
+        height = r['value']
+        bonus = (height - bheight) * 6 * balance / 100000000
+        return {'available':str(bonus),'unavailable':'0'}
+    return {'available':'0', 'unavailable':'0'}
 
 @get('/{net}/history/{address}')
 async def history(net, address, request, *, asset=0, index=1, length=20):
