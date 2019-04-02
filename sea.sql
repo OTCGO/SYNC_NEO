@@ -13,3 +13,16 @@ CREATE TABLE IF NOT EXISTS assets (
   contract_name VARCHAR(64) NOT NULL,
   PRIMARY KEY (id)
 );
+
+ CREATE TABLE IF NOT EXISTS history (
+   id INT UNSIGNED AUTO_INCREMENT,
+   txid CHAR(66) NOT NULL,
+   operation VARCHAR(3) NOT NULL,
+   index_n SMALLINT UNSIGNED NOT NULL,
+   address VARCHAR(34) NOT NULL,
+   value VARCHAR(40) NOT NULL,
+   timepoint INT UNSIGNED NOT NULL,
+   PRIMARY KEY (id),
+   UNIQUE INDEX uidx_txid_op_index (txid, operation, index_n),
+   INDEX idx_address_tp_op_value (address, timepoint, operation, value)
+ );
