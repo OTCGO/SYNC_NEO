@@ -43,3 +43,13 @@ CREATE TABLE IF NOT EXISTS assets (
    UNIQUE INDEX uidx_txid_index (txid, index_n),
    INDEX idx_address_asset_status_value_index_txid (address, asset, status, value, index_n, txid)
  );
+
+ CREATE TABLE IF NOT EXISTS balance (
+   id INT UNSIGNED AUTO_INCREMENT,
+   address VARCHAR(34) NOT NULL,
+   asset VARCHAR(64) NOT NULL,
+   value VARCHAR(40) NOT NULL,
+   update_height INT UNSIGNED DEFAULT NULL,
+   PRIMARY KEY (id),
+   UNIQUE INDEX uidx_address_asset (address, asset)
+ );
