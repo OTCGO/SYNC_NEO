@@ -9,9 +9,9 @@ import uvloop
 import asyncio
 import aiohttp
 import aiomysql
-import binascii
 import hashlib
 from random import randint
+from binascii import unhexlify
 from base58 import b58encode
 from logzero import logger
 from decimal import Decimal as D
@@ -19,29 +19,30 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from Config import Config as C
 from CommonTool import CommonTool as CT
+from pytz import utc
 
 
 class Crawler:
-    def __init__(self, mongo_uri, mongo_db, neo_uri, loop, tasks='1000'):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri,maxPoolSize=2)
-        self.state  = self.client[mongo_db].state
-        self.nep5history = self.client[mongo_db].nep5history
+    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, net, tasks='1000'):
+        self.start_time = CT.now()
+        self.mysql_args = mysql_args
         self.max_tasks = int(tasks)
         self.neo_uri = neo_uri
+        self.loop = loop
         self.processing = []
         self.cache = {}
         self.cache_log = {}
         self.cache_decimals = {}
         conn = aiohttp.TCPConnector(limit=10000)
         self.session = aiohttp.ClientSession(loop=loop,connector=conn)
-        self.net = C.get_net()
-        self.super_node_uri = C.get_super_node()
+        self.net = net
+        self.super_node_uri = super_node_uri
         self.scheduler = AsyncIOScheduler(job_defaults = {
                         'coalesce': True,
                         'max_instances': 1,
                         'misfire_grace_time': 2
             })
-        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri')
+        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri', timezone=utc)
         self.scheduler.start()
 
     async def get_super_node_info(self):
@@ -76,7 +77,7 @@ class Crawler:
 
     @classmethod
     def scripthash_to_address(cls, sh):
-        tmp = binascii.unhexlify('17' + sh)
+        tmp = unhexlify('17' + sh)
         result = b58encode(tmp + cls.hash256(tmp)[:4])
         if isinstance(result, bytes): result = result.decode('utf8')
         return result
@@ -263,20 +264,25 @@ class Crawler:
 
 
 if __name__ == "__main__":
-    START_TIME = CT.now()
-    logger.info('STARTING...')
-    mongo_uri = C.get_mongo_uri()
-    neo_uri = C.get_neo_uri()
-    mongo_db = C.get_mongo_db()
-    tasks = C.get_tasks()
-    loop = asyncio.get_event_loop()
-    crawler = Crawler(mongo_uri, mongo_db, neo_uri, loop, tasks)
-    loop.run_until_complete(crawler.crawl())
-    '''
+    mysql_args = {
+                    'host':     C.get_mysql_host(),
+                    'port':     C.get_mysql_port(),
+                    'user':     C.get_mysql_user(),
+                    'password': C.get_mysql_pass(),
+                    'db':       C.get_mysql_db(), 
+                    'autocommit':True
+                }
+    neo_uri         = C.get_neo_uri()
+    loop            = asyncio.get_event_loop()
+    super_node_uri  = C.get_super_node()
+    net             = C.get_net()
+    tasks           = C.get_tasks()
+
+    crawler = Crawler(mysql_args, neo_uri, loop, super_node_uri, net, tasks)
+
     try:
         loop.run_until_complete(crawler.crawl())
     except Exception as e:
-        logger.error('LOOP EXCEPTION: %s' % e)
+        logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
     finally:
         loop.close()
-    '''
