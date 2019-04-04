@@ -1,9 +1,10 @@
 #! /usr/bin/env python3
 # coding: utf-8
-# flow@蓝鲸淘
+# flow@SEA
 # Licensed under the MIT License.
 
 import time
+import datetime
 
 
 class CommonTool:
@@ -36,3 +37,7 @@ class CommonTool:
             else:
                 arr[idx], arr[length - idx] = arr[length - idx], arr[idx]
         return arr.decode('ascii')
+
+    @staticmethod
+    def timestamp_to_utc(timestamp):
+        return datetime.datetime.utcfromtimestamp(timestamp)

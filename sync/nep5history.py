@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
 # coding: utf-8
-# flow@蓝鲸淘
+# flow@SEA
 # Licensed under the MIT License.
 
 import sys
@@ -8,12 +8,11 @@ import math
 import uvloop
 import asyncio
 import aiohttp
-import datetime
+import aiomysql
 import binascii
 import hashlib
 from random import randint
 from base58 import b58encode
-import motor.motor_asyncio
 from logzero import logger
 from decimal import Decimal as D
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -181,9 +180,6 @@ class Crawler:
         except Exception as e:
             logger.error('Unable to update a vout %s:%s' % (_id,e))
             sys.exit(1)
-
-    def timestamp_to_utc(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(timestamp)
 
     async def crawl(self):
         self.start = await self.get_history_state()

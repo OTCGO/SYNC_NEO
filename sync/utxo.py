@@ -1,14 +1,14 @@
 #! /usr/bin/env python3
 # coding: utf-8
-# flow@蓝鲸淘
+# flow@SEA
 # Licensed under the MIT License.
 
 import sys
 import uvloop
 import asyncio
 import aiohttp
+import aiomysql
 from random import randint
-import motor.motor_asyncio
 from logzero import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
