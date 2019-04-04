@@ -229,6 +229,9 @@ class Crawler:
             if result:
                 return result
             return -1
+        except Exception as e:
+            logger.error("mysql SELECT failure:{}".format(e.args[0]))
+            sys.exit(1)
         finally:
             await self.pool.release(conn)
 
@@ -250,16 +253,27 @@ class Crawler:
     def timestamp_to_utc(self, timestamp):
         return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
-    async def update_a_global_asset(self, key, asset):
-        if key.startswith('0x'):
-            key = key[2:]
-        _id = key
+    async def mysql_insert_one(self, sql):
+        conn, cur = await self.get_mysql_cursor()
+        logger.info('SQL:%s' % sql)
         try:
-            await self.assets.update_one({'_id':_id},
-                    {'$set':asset},upsert=True)
+            await cur.execute(sql)
+            num = cur.rowcount
+            logger.info('%s row affected' % num)
+            return num
         except Exception as e:
-            logger.error('Unable to update a global asset %s:%s' % (_id,e))
+            logger.error("mysql INSERT failure:{}".format(e.args[0]))
             sys.exit(1)
+        finally:
+            await self.pool.release(conn)
+
+    async def update_a_global_asset(self, key, asset):
+        if key.startswith('0x'): key = key[2:]
+        if 'c56f33fc6ecfcd0c225c4ab356fee59390af8560be0e930faebe74a6daff7c9b' == key: asset['name'][0]['name'] = 'NEO'
+        if '602c79718b16e442de58778e148d0b1084e3b2dffd5de6b7b16cee7969282de7' == key: asset['name'][0]['name'] = 'GAS'
+        sql="INSERT IGNORE INTO assets(asset,type,name,symbol,version,decimals,contract_name) VALUES ('%s','%s','%s','%s','%s',%s,'%s');" % (key,asset['type'],asset['name'][0]['name'],'','',asset['precision'],'')
+        await self.mysql_insert_one(sql)
+
 
     async def update_a_nep5_asset(self, key, asset):
         _id = contract = key
@@ -304,9 +318,13 @@ class Crawler:
                 min_height = self.processing[0]
                 await asyncio.wait([self.cache_block(h) for h in self.processing])
                 if self.processing != sorted(self.cache.keys()):
-                    msg = 'cache != processing'
+                    msg = 'can not cache so much blocks one time(cache != processing)'
                     logger.error(msg)
-                    sys.exit(1)
+                    self.max_tasks -= 10
+                    if self.max_tasks > 0:
+                        continue
+                    else:
+                        sys.exit(1)
                 
                 global_assets = {}
                 nep5_assets = {}
@@ -316,6 +334,7 @@ class Crawler:
                         if 'RegisterTransaction' == tx['type']:
                             global_assets[tx['txid']] = tx['asset']
                             global_assets[tx['txid']]['time'] = block_time
+                        '''
                         if 'InvocationTransaction' == tx['type'] and 490 <= int(float(tx['sys_fee'])):
                             if tx['script'].endswith('68134e656f2e436f6e74726163742e437265617465'):
                                 try:
@@ -325,15 +344,18 @@ class Crawler:
                                     continue
                                 asset['time'] = block_time
                                 nep5_assets[asset['contract']] = asset
+                        '''
                 if global_assets:
                     await asyncio.wait([self.update_a_global_asset(*i) for i in global_assets.items()])
+                '''
                 if nep5_assets:
                     await asyncio.wait([self.update_a_nep5_asset(*i) for i in nep5_assets.items()])
+                '''
 
                 time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
-                await self.update_asset_state(max_height)
+                #await self.update_asset_state(max_height)
                 self.start = max_height + 1
                 del self.processing
                 del self.cache
@@ -350,9 +372,11 @@ class Crawler:
             self.start = await self.get_asset_state()
             self.start += 1
             logger.info('start infinite loop from height: %s' % self.start)
-            #await self.infinite_loop()
-        except Exception as e:
+            await self.infinite_loop()
+            '''
+            except Exception as e:
             logger.error('LOOP EXCEPTION: %s' % e)
+            '''
         finally:
             self.pool.close()
             await self.pool.wait_closed()
@@ -377,7 +401,9 @@ if __name__ == "__main__":
 
     try:
         loop.run_until_complete(crawler.crawl())
-    except Exception as e:
+        '''
+        except Exception as e:
         logger.error('LOOP EXCEPTION: %s' % e)
+        '''
     finally:
         loop.close()
