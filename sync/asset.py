@@ -8,7 +8,6 @@ import uvloop
 import asyncio
 import aiohttp
 import aiomysql
-import datetime
 import hashlib
 from random import randint
 from binascii import hexlify, unhexlify
@@ -189,7 +188,7 @@ class Crawler:
         async with self.session.post(self.neo_uri,
                 json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
             if 200 != resp.status:
-                logger.error('Unable to fetch block {}'.format(height))
+                logger.error('Unable to fetch block {}, http status: {}'.format(height, resp.status))
                 sys.exit(1)
             j = await resp.json()
             return j['result']
@@ -225,9 +224,11 @@ class Crawler:
         try:
             await cur.execute("select update_height from status where name='asset';")
             result = await cur.fetchone()
-            logger.info('database asset height: %s' % result)
             if result:
-                return result
+                uh = result[0]
+                logger.info('database asset height: %s' % uh)
+                return uh
+            logger.info('database asset height: -1')
             return -1
         except Exception as e:
             logger.error("mysql SELECT failure:{}".format(e.args[0]))
@@ -244,14 +245,12 @@ class Crawler:
             j = await resp.json()
             return j['result']
 
-    async def update_asset_state(self, height):
-        await self.state.update_one({'_id':'asset'}, {'$set': {'value':height}}, upsert=True)
+    async def update_asset_status(self, height):
+        sql="INSERT INTO status(name,update_height) VALUES ('%s',%s) ON DUPLICATE KEY UPDATE update_height=%s;" % ('asset',height,height)
+        await self.mysql_insert_one(sql)
 
     async def cache_block(self, height):
         self.cache[height] = await self.get_block(height)
-
-    def timestamp_to_utc(self, timestamp):
-        return datetime.datetime.utcfromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
     async def mysql_insert_one(self, sql):
         conn, cur = await self.get_mysql_cursor()
@@ -276,15 +275,12 @@ class Crawler:
 
 
     async def update_a_nep5_asset(self, key, asset):
-        _id = contract = key
         funcs = ['totalSupply','name','symbol','decimals']
-        del asset['contract']
         results = await asyncio.gather(*[self.get_invokefunction(contract, func) for func in funcs])
         for i in range(len(funcs)):
             func = funcs[i]
             r = results[i]
-            if r['state'].startswith('FAULT'):
-                return
+            if r['state'].startswith('FAULT'): return
             if 'totalSupply' == func:
                 try:
                     asset[func] = self.hex_to_num_str(r['stack'][0]['value'])
@@ -292,18 +288,13 @@ class Crawler:
                     asset[func] = 'unknown'
             if func in ['name', 'symbol']:
                 asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
+                if 'symbol' == func and 0 == len(asset[func]): return
             if 'decimals' == func:
                 v = r['stack'][0]['value']
-                if not v:
-                    v = "0"
+                if not v: v = "0"
                 asset[func] = v
-        try:
-            asset['type'] = 'NEP5'
-            await self.assets.update_one({'_id':_id},
-                    {'$set':asset},upsert=True)
-        except Exception as e:
-            logger.error('Unable to update a nep5 asset %s:%s' % (_id,e))
-            sys.exit(1)
+        sql="INSERT IGNORE INTO assets(asset,type,name,symbol,version,decimals,contract_name) VALUES ('%s','NEP5','%s','%s','%s',%s,'%s');" % (key,asset['name'],asset['symbol'],asset['version'],asset['decimals'],asset['contract_name'])
+        await self.mysql_insert_one(sql)
 
     async def infinite_loop(self):
         while True:
@@ -334,7 +325,6 @@ class Crawler:
                         if 'RegisterTransaction' == tx['type']:
                             global_assets[tx['txid']] = tx['asset']
                             global_assets[tx['txid']]['time'] = block_time
-                        '''
                         if 'InvocationTransaction' == tx['type'] and 490 <= int(float(tx['sys_fee'])):
                             if tx['script'].endswith('68134e656f2e436f6e74726163742e437265617465'):
                                 try:
@@ -342,20 +332,16 @@ class Crawler:
                                 except Exception as e:
                                     print('parse error:',e)
                                     continue
-                                asset['time'] = block_time
                                 nep5_assets[asset['contract']] = asset
-                        '''
                 if global_assets:
                     await asyncio.wait([self.update_a_global_asset(*i) for i in global_assets.items()])
-                '''
                 if nep5_assets:
                     await asyncio.wait([self.update_a_nep5_asset(*i) for i in nep5_assets.items()])
-                '''
 
                 time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
                         (max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
-                #await self.update_asset_state(max_height)
+                await self.update_asset_status(max_height)
                 self.start = max_height + 1
                 del self.processing
                 del self.cache
@@ -375,7 +361,7 @@ class Crawler:
             await self.infinite_loop()
             '''
             except Exception as e:
-            logger.error('LOOP EXCEPTION: %s' % e)
+            logger.error('CRAWL EXCEPTION: %s' % e)
             '''
         finally:
             self.pool.close()
