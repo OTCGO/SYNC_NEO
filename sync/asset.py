@@ -1,42 +1,43 @@
 #! /usr/bin/env python3
 # coding: utf-8
-# flow@蓝鲸淘
+# flow@SEA
 # Licensed under the MIT License.
 
 import sys
 import uvloop
 import asyncio
 import aiohttp
+import aiomysql
 import datetime
 import hashlib
 from random import randint
 from binascii import hexlify, unhexlify
-import motor.motor_asyncio
 from logzero import logger
 from decimal import Decimal as D
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from Config import Config as C
 from CommonTool import CommonTool as CT
+from pytz import utc
 
 
 class Crawler:
-    def __init__(self, mongo_uri, mongo_db, neo_uri, loop, tasks='1000'):
-        self.client = motor.motor_asyncio.AsyncIOMotorClient(mongo_uri,maxPoolSize=2)
-        self.state  = self.client[mongo_db].state
-        self.assets = self.client[mongo_db].assets
+    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+        self.start_time = CT.now()
+        self.mysql_args = mysql_args
         self.max_tasks = int(tasks)
         self.neo_uri = neo_uri
+        self.loop = loop
         self.processing = []
         self.cache = {}
         self.session = aiohttp.ClientSession(loop=loop)
-        self.super_node_uri = C.get_super_node()
+        self.super_node_uri = super_node_uri
         self.scheduler = AsyncIOScheduler(job_defaults = {
                         'coalesce': True,
                         'max_instances': 1,
                         'misfire_grace_time': 2
             })
-        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri')
+        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri', timezone=utc)
         self.scheduler.start()
 
     async def get_super_node_info(self):
@@ -202,13 +203,34 @@ class Crawler:
             j = await resp.json()
             return j['result']
 
+    async def get_mysql_pool(self):
+        try:
+            logger.info('start to connect db')
+            pool = await aiomysql.create_pool(**self.mysql_args)
+            logger.info('succeed to connet db!')
+            return pool
+        except asyncio.CancelledError:
+            raise asyncio.CancelledError
+        except Exception as e:
+            logger.error("mysql connet failure:{}".format(e.args[0]))
+            return False
+
+    async def get_mysql_cursor(self):
+        conn = await self.pool.acquire()
+        cur  = await conn.cursor()
+        return conn, cur
+
     async def get_asset_state(self):
-        result = await self.state.find_one({'_id':'asset'})
-        if not result:
-            await self.state.insert_one({'_id':'asset','value':-1})
+        conn, cur = await self.get_mysql_cursor()
+        try:
+            await cur.execute("select update_height from status where name='asset';")
+            result = await cur.fetchone()
+            logger.info('database asset height: %s' % result)
+            if result:
+                return result
             return -1
-        else:
-            return result['value']
+        finally:
+            await self.pool.release(conn)
 
     async def get_invokefunction(self, contract, func):
         async with self.session.post(self.neo_uri,
@@ -269,10 +291,7 @@ class Crawler:
             logger.error('Unable to update a nep5 asset %s:%s' % (_id,e))
             sys.exit(1)
 
-    async def crawl(self):
-        self.start = await self.get_asset_state()
-        self.start += 1
-        
+    async def infinite_loop(self):
         while True:
             current_height = await self.get_block_count()
             time_a = CT.now()
@@ -313,7 +332,7 @@ class Crawler:
 
                 time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
-                        (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
+                        (max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
                 await self.update_asset_state(max_height)
                 self.start = max_height + 1
                 del self.processing
@@ -323,19 +342,42 @@ class Crawler:
             else:
                await asyncio.sleep(0.5)
 
+    async def crawl(self):
+        self.pool = await self.get_mysql_pool()
+        if not self.pool:
+            sys.exit(1)
+        try:
+            self.start = await self.get_asset_state()
+            self.start += 1
+            logger.info('start infinite loop from height: %s' % self.start)
+            #await self.infinite_loop()
+        except Exception as e:
+            logger.error('LOOP EXCEPTION: %s' % e)
+        finally:
+            self.pool.close()
+            await self.pool.wait_closed()
+            await self.session.close()
+
 
 if __name__ == "__main__":
-    START_TIME = CT.now()
-    logger.info('STARTING...')
-    mongo_uri = C.get_mongo_uri()
-    neo_uri = C.get_neo_uri()
-    mongo_db = C.get_mongo_db()
-    tasks = C.get_tasks()
-    loop = asyncio.get_event_loop()
-    crawler = Crawler(mongo_uri, mongo_db, neo_uri, loop, tasks)
-    #try:
-    loop.run_until_complete(crawler.crawl())
-    #except Exception as e:
-    #logger.error('LOOP EXCEPTION: %s' % e)
-    #finally:
-    #loop.close()
+    mysql_args = {
+                    'host':     C.get_mysql_host(),
+                    'port':     C.get_mysql_port(),
+                    'user':     C.get_mysql_user(),
+                    'password': C.get_mysql_pass(),
+                    'db':       C.get_mysql_db(), 
+                    'autocommit':True
+                }
+    neo_uri         = C.get_neo_uri()
+    loop            = asyncio.get_event_loop()
+    super_node_uri  = C.get_super_node()
+    tasks           = C.get_tasks()
+
+    crawler = Crawler(mysql_args, neo_uri, loop, super_node_uri, tasks)
+
+    try:
+        loop.run_until_complete(crawler.crawl())
+    except Exception as e:
+        logger.error('LOOP EXCEPTION: %s' % e)
+    finally:
+        loop.close()
