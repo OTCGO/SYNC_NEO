@@ -359,10 +359,8 @@ class Crawler:
             self.start += 1
             logger.info('start infinite loop from height: %s' % self.start)
             await self.infinite_loop()
-            '''
-            except Exception as e:
-            logger.error('CRAWL EXCEPTION: %s' % e)
-            '''
+        except Exception as e:
+            logger.error('CRAWL EXCEPTION: {}'.format(e.args[0]))
         finally:
             self.pool.close()
             await self.pool.wait_closed()
@@ -387,9 +385,7 @@ if __name__ == "__main__":
 
     try:
         loop.run_until_complete(crawler.crawl())
-        '''
-        except Exception as e:
-        logger.error('LOOP EXCEPTION: %s' % e)
-        '''
+    except Exception as e:
+        logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
     finally:
         loop.close()
