@@ -19,7 +19,8 @@ from pytz import utc
 
 
 class Crawler:
-    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+        self.name = name
         self.start_time = CT.now()
         self.mysql_args = mysql_args
         self.max_tasks = int(tasks)
@@ -81,7 +82,22 @@ class Crawler:
             j = await resp.json()
             return j['result']
 
-    async def get_history_state(self):
+    async def get_state(self):
+        conn, cur = await self.get_mysql_cursor()
+        try:
+            await cur.execute("select update_height from status where name='%s';" % self.name)
+            result = await cur.fetchone()
+            if result:
+                uh = result[0]
+                logger.info('database asset height: %s' % uh)
+                return uh
+            logger.info('database asset height: -1')
+            return -1
+        except Exception as e:
+            logger.error("mysql SELECT failure:{}".format(e.args[0]))
+            sys.exit(1)
+        finally:
+            await self.pool.release(conn)
         result = await self.state.find_one({'_id':'history'})
         if not result:
             await self.state.insert_one({'_id':'history','value':-1})
@@ -131,10 +147,7 @@ class Crawler:
             logger.error('Unable to update a vout %s:%s' % (_id,e))
             sys.exit(1)
 
-    async def crawl(self):
-        self.start = await self.get_history_state()
-        self.start += 1
-        
+    async def infinite_loop(self):
         while True:
             current_height = await self.get_block_count()
             time_a = CT.now()
@@ -224,6 +237,22 @@ class Crawler:
             else:
                await asyncio.sleep(0.5)
 
+    async def crawl(self):
+        self.pool = await self.get_mysql_pool()
+        if not self.pool:
+            sys.exit(1)
+        try:
+            self.start = await self.get_state(self.name)
+            self.start += 1
+            logger.info('start infinite loop from height: %s' % self.start)
+            await self.infinite_loop()
+        except Exception as e:
+            logger.error('CRAWL EXCEPTION: {}'.format(e.args[0]))
+        finally:
+            self.pool.close()
+            await self.pool.wait_closed()
+            await self.session.close()
+
 
 if __name__ == "__main__":
     mysql_args = {
@@ -239,7 +268,7 @@ if __name__ == "__main__":
     super_node_uri  = C.get_super_node()
     tasks           = C.get_tasks()
 
-    crawler = Crawler(mysql_args, neo_uri, loop, super_node_uri, tasks)
+    crawler = Crawler('history', mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     try:
         loop.run_until_complete(crawler.crawl())
