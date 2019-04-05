@@ -4,6 +4,7 @@
 # Licensed under the MIT License.
 
 import sys
+import math
 import uvloop
 import asyncio
 import aiohttp
@@ -12,6 +13,7 @@ import hashlib
 from random import randint
 from binascii import hexlify, unhexlify
 from logzero import logger
+from base58 import b58encode
 from decimal import Decimal as D
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -57,6 +59,17 @@ class Crawler:
         logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
     @staticmethod
+    def hash256(b):
+        return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+    @classmethod
+    def scripthash_to_address(cls, sh):
+        tmp = unhexlify('17' + sh)
+        result = b58encode(tmp + cls.hash256(tmp)[:4])
+        if isinstance(result, bytes): result = result.decode('utf8')
+        return result
+
+    @staticmethod
     def bytes_to_num(bs):
         s = '0x'
         for i in range(len(bs)-1, -1, -1):
@@ -68,9 +81,11 @@ class Crawler:
         return int(s, 16)
 
     @classmethod
-    def hex_to_num_str(cls, hs):
+    def hex_to_num_str(cls, hs, decimals=8):
+        if isinstance(decimals, str): decimals = int(decimals)
+        if not isinstance(decimals, int): sys.exit(1)
         bs = unhexlify(hs)
-        return CT.sci_to_str(str(D(cls.bytes_to_num(bs))/100000000))
+        return CT.sci_to_str(str(D(cls.bytes_to_num(bs))/D(math.pow(10, decimals))))
 
     @staticmethod
     def script_to_hash(unhex):

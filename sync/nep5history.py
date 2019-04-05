@@ -7,89 +7,24 @@ import sys
 import math
 import uvloop
 import asyncio
-import aiohttp
-import aiomysql
-import hashlib
-from random import randint
-from binascii import unhexlify
-from base58 import b58encode
-from logzero import logger
-from decimal import Decimal as D
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+from logzero import logger
+from Crawler import Crawler
+from decimal import Decimal as D
 from Config import Config as C
 from CommonTool import CommonTool as CT
-from pytz import utc
 
 
-class Crawler:
-    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, net, tasks='1000'):
-        self.start_time = CT.now()
-        self.mysql_args = mysql_args
-        self.max_tasks = int(tasks)
-        self.neo_uri = neo_uri
-        self.loop = loop
-        self.processing = []
-        self.cache = {}
+class History:
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, net, tasks='1000'):
+        super(History,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        self.net = net
         self.cache_log = {}
         self.cache_decimals = {}
-        conn = aiohttp.TCPConnector(limit=10000)
-        self.session = aiohttp.ClientSession(loop=loop,connector=conn)
-        self.net = net
-        self.super_node_uri = super_node_uri
-        self.scheduler = AsyncIOScheduler(job_defaults = {
-                        'coalesce': True,
-                        'max_instances': 1,
-                        'misfire_grace_time': 2
-            })
-        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri', timezone=utc)
-        self.scheduler.start()
-
-    async def get_super_node_info(self):
-        async with self.session.get(self.super_node_uri) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch supernode info')
-                sys.exit(1)
-            j = await resp.json()
-            return j
-
-    async def update_neo_uri(self):
-        heightA = await self.get_block_count()
-        info = await self.get_super_node_info()
-        heightB = info['height']
-        if heightA < heightB:
-            self.neo_uri = info['fast'][randint(0,len(info['fast'])-1)]
-        logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
     def integer_to_num_str(self, int_str, decimals=8):
         d = D(int_str)
         return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
-
-    def hex_to_num_str(self, fixed8_str, decimals=8):
-        hex_str = CT.big_or_little(fixed8_str)
-        if not hex_str: return '0'
-        d = D(int('0x' + hex_str, 16))
-        return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
-
-    @staticmethod
-    def hash256(b):
-        return hashlib.sha256(hashlib.sha256(b).digest()).digest()
-
-    @classmethod
-    def scripthash_to_address(cls, sh):
-        tmp = unhexlify('17' + sh)
-        result = b58encode(tmp + cls.hash256(tmp)[:4])
-        if isinstance(result, bytes): result = result.decode('utf8')
-        return result
-
-    async def get_invokefunction(self, contract, func):
-        async with self.session.post(self.neo_uri,
-                json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to get invokefunction')
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
 
     async def get_decimals(self, contract):
         d = await self.get_invokefunction(contract, 'decimals')
@@ -103,40 +38,6 @@ class Crawler:
         if contract not in self.cache_decimals.keys():
             self.cache_decimals[contract] = await self.get_decimals(contract)
         return self.cache_decimals[contract]
-
-    async def get_block(self, height):
-        async with self.session.post(self.neo_uri, json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch block {}'.format(height))
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
-
-    async def get_block_count(self):
-        async with self.session.post(self.neo_uri,
-                json={'jsonrpc':'2.0','method':'getblockcount','params':[],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch blockcount')
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
-
-    async def get_history_state(self):
-        start = -1
-        if 'mainnet' == self.net: start = 1444800
-        if 'testnet' == self.net: start = 442400
-        result = await self.state.find_one({'_id':'nep5history'})
-        if not result:
-            await self.state.insert_one({'_id':'nep5history','value':start})
-            return start
-        else:
-            return result['value']
-
-    async def update_history_state(self, height):
-        await self.state.update_one({'_id':'nep5history'}, {'$set': {'value':height}}, upsert=True)
-
-    async def cache_block(self, height):
-        self.cache[height] = await self.get_block(height)
 
     async def cache_applicationlog(self, txid):
         url = self.super_node_uri + '/' + self.net + '/log/' + txid
@@ -182,85 +83,56 @@ class Crawler:
             logger.error('Unable to update a vout %s:%s' % (_id,e))
             sys.exit(1)
 
-    async def crawl(self):
-        self.start = await self.get_history_state()
-        self.start += 1
+    async def deal_with(self):
+        txids = [] 
+        for block in self.cache.values():
+            for tx in block['tx']:
+                if 'InvocationTransaction' == tx['type']:
+                    txids.append(tx['txid'])
+        if txids:
+            await asyncio.wait([self.cache_applicationlog(txid) for txid in txids])
+        if sorted(txids) != sorted(self.cache_log.keys()):
+            msg = 'cache log error'
+            logger.error(msg)
+            sys.exit(1)
 
-        while True:
-            current_height = await self.get_block_count()
-            time_a = CT.now()
-            if self.start < current_height:
-                stop = self.start + self.max_tasks
-                if stop >= current_height:
-                    stop = current_height
-                self.processing.extend([i for i in range(self.start,stop)])
-                max_height = max(self.processing)
-                min_height = self.processing[0]
-                await asyncio.wait([self.cache_block(h) for h in self.processing])
-                if self.processing != sorted(self.cache.keys()):
-                    msg = 'cache != processing'
-                    logger.error(msg)
-                    sys.exit(1)
-                txids = [] 
-                for block in self.cache.values():
-                    for tx in block['tx']:
-                        if 'InvocationTransaction' == tx['type']:
-                            txids.append(tx['txid'])
-                if txids:
-                    await asyncio.wait([self.cache_applicationlog(txid) for txid in txids])
-                if sorted(txids) != sorted(self.cache_log.keys()):
-                    msg = 'cache log error'
-                    logger.error(msg)
-                    sys.exit(1)
+        #await asyncio.wait([self.add_nep5_history(log) for log in self.cache.values()])
+        vins = [] #froms
+        vouts = [] #tos
+        for block in self.cache.values():
+            block_time = block['time']
+            for tx in block['tx']:
+                txid = tx['txid']
+                if 'InvocationTransaction' == tx['type']:
+                    log = self.cache_log[txid]
+                    if ('vmstate' in log.keys() and 'HALT, BREAK' == log['vmstate']) or ('executions' in log.keys() and 'vmstate' in log['executions'][0].keys() and 'HALT, BREAK' == log['executions'][0]['vmstate']):
+                        if 'executions' in log.keys(): log['notifications'] = log['executions'][0]['notifications']
+                        for i in range(len(log['notifications'])):
+                            n = log['notifications'][i]
+                            asset = n['contract'][2:]
+                            if 'value' in n['state'].keys() and \
+                                    isinstance(n['state']['value'],list) and \
+                                    4 == len(n['state']['value']) and \
+                                    '7472616e73666572' == n['state']['value'][0]['value']:
+                                if 'Integer' == n['state']['value'][3]['type']:
+                                    value = self.integer_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                else:
+                                    value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                from_sh = n['state']['value'][1]['value']
+                                if from_sh:
+                                    from_address = self.scripthash_to_address(from_sh)
+                                    vins.append([asset, txid, i, from_address, value, block_time])
+                                to_sh = n['state']['value'][2]['value']
+                                to_address = self.scripthash_to_address(to_sh)
+                                vouts.append([asset, txid, i, to_address, value, block_time])
+                    
+        if vins:
+            await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
+        if vouts:
+            await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
 
-                #await asyncio.wait([self.add_nep5_history(log) for log in self.cache.values()])
-                vins = [] #froms
-                vouts = [] #tos
-                for block in self.cache.values():
-                    block_time = block['time']
-                    for tx in block['tx']:
-                        txid = tx['txid']
-                        if 'InvocationTransaction' == tx['type']:
-                            log = self.cache_log[txid]
-                            if ('vmstate' in log.keys() and 'HALT, BREAK' == log['vmstate']) or ('executions' in log.keys() and 'vmstate' in log['executions'][0].keys() and 'HALT, BREAK' == log['executions'][0]['vmstate']):
-                                if 'executions' in log.keys(): log['notifications'] = log['executions'][0]['notifications']
-                                for i in range(len(log['notifications'])):
-                                    n = log['notifications'][i]
-                                    asset = n['contract'][2:]
-                                    if 'value' in n['state'].keys() and \
-                                            isinstance(n['state']['value'],list) and \
-                                            4 == len(n['state']['value']) and \
-                                            '7472616e73666572' == n['state']['value'][0]['value']:
-                                        if 'Integer' == n['state']['value'][3]['type']:
-                                            value = self.integer_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
-                                        else:
-                                            value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
-                                        from_sh = n['state']['value'][1]['value']
-                                        if from_sh:
-                                            from_address = self.scripthash_to_address(from_sh)
-                                            vins.append([asset, txid, i, from_address, value, block_time])
-                                        to_sh = n['state']['value'][2]['value']
-                                        to_address = self.scripthash_to_address(to_sh)
-                                        vouts.append([asset, txid, i, to_address, value, block_time])
-                            
-                if vins:
-                    await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
-                if vouts:
-                    await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
-
-                time_b = CT.now()
-                logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
-                        (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
-                await self.update_history_state(max_height)
-                self.start = max_height + 1
-                del self.processing
-                del self.cache
-                del self.cache_log
-                self.processing = []
-                self.cache = {}
-                self.cache_log = {}
-            else:
-               await asyncio.sleep(0.5)
+        del self.cache_log
+        self.cache_log = {}
 
 
 if __name__ == "__main__":
@@ -278,10 +150,10 @@ if __name__ == "__main__":
     net             = C.get_net()
     tasks           = C.get_tasks()
 
-    crawler = Crawler(mysql_args, neo_uri, loop, super_node_uri, net, tasks)
+    h = History('history', mysql_args, neo_uri, loop, super_node_uri, net, tasks)
 
     try:
-        loop.run_until_complete(crawler.crawl())
+        loop.run_until_complete(h.crawl())
     except Exception as e:
         logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
     finally:

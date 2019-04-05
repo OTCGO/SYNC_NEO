@@ -24,24 +24,24 @@ class Asset(Crawler):
         await self.mysql_insert_one(sql)
 
     async def update_a_nep5_asset(self, key, asset):
-        funcs = ['totalSupply','name','symbol','decimals']
-        results = await asyncio.gather(*[self.get_invokefunction(contract, func) for func in funcs])
+        funcs = ['decimals','totalSupply','name','symbol']
+        results = await asyncio.gather(*[self.get_invokefunction(key, func) for func in funcs])
         for i in range(len(funcs)):
             func = funcs[i]
             r = results[i]
             if r['state'].startswith('FAULT'): return
+            if 'decimals' == func:
+                v = r['stack'][0]['value']
+                if not v: v = "0"
+                asset[func] = v
             if 'totalSupply' == func:
                 try:
-                    asset[func] = self.hex_to_num_str(r['stack'][0]['value'])
+                    asset[func] = self.hex_to_num_str(r['stack'][0]['value'], asset['decimals'])
                 except:
                     asset[func] = 'unknown'
             if func in ['name', 'symbol']:
                 asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
                 if 'symbol' == func and 0 == len(asset[func]): return
-            if 'decimals' == func:
-                v = r['stack'][0]['value']
-                if not v: v = "0"
-                asset[func] = v
         sql="INSERT IGNORE INTO assets(asset,type,name,symbol,version,decimals,contract_name) VALUES ('%s','NEP5','%s','%s','%s',%s,'%s');" % (key,asset['name'],asset['symbol'],asset['version'],asset['decimals'],asset['contract_name'])
         await self.mysql_insert_one(sql)
 
