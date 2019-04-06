@@ -274,7 +274,7 @@ class Crawler:
         try:
             await cur.execute(sql)
             num = cur.rowcount
-            logger.info('%s row affected' % num)
+            #logger.info('%s row affected' % num)
             return num
         except Exception as e:
             logger.error("mysql INSERT failure:{}".format(e.args[0]))

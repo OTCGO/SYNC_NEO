@@ -41,7 +41,7 @@ class Asset(Crawler):
                     asset[func] = 'unknown'
             if func in ['name', 'symbol']:
                 asset[func] = unhexlify(r['stack'][0]['value']).decode('utf8')
-                if 'symbol' == func and 0 == len(asset[func]): return
+                if 'symbol' == func and (0 == len(asset[func]) or '00' == asset[func]): return
         sql="INSERT IGNORE INTO assets(asset,type,name,symbol,version,decimals,contract_name) VALUES ('%s','NEP5','%s','%s','%s',%s,'%s');" % (key,asset['name'],asset['symbol'],asset['version'],asset['decimals'],asset['contract_name'])
         await self.mysql_insert_one(sql)
 
