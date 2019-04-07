@@ -4,35 +4,20 @@
 # Licensed under the MIT License.
 
 import sys
-import math
 import uvloop
 import asyncio
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from logzero import logger
 from Crawler import Crawler
-from decimal import Decimal as D
 from Config import Config as C
-from CommonTool import CommonTool as CT
 
 
-class History:
+class History(Crawler):
     def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, net, tasks='1000'):
         super(History,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
         self.net = net
         self.cache_log = {}
         self.cache_decimals = {}
-
-    def integer_to_num_str(self, int_str, decimals=8):
-        d = D(int_str)
-        return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
-
-    async def get_decimals(self, contract):
-        d = await self.get_invokefunction(contract, 'decimals')
-        if 'state' in d.keys() and d['state'].startswith('HALT'):
-            if d['stack'][0]['value']:
-                return int(d['stack'][0]['value'])
-            return 0
-        return 8
 
     async def get_cache_decimals(self, contract):
         if contract not in self.cache_decimals.keys():

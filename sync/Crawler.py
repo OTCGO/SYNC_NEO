@@ -59,6 +59,12 @@ class Crawler:
         logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
     @staticmethod
+    def integer_to_num_str(int_str, decimals=8):
+        '''eg: "100000000" --(decimals=8)--> "1" '''
+        d = D(int_str)
+        return CT.sci_to_str(str(d/D(math.pow(10, decimals))))
+
+    @staticmethod
     def hash256(b):
         return hashlib.sha256(hashlib.sha256(b).digest()).digest()
 
@@ -260,6 +266,15 @@ class Crawler:
                 sys.exit(1)
             j = await resp.json()
             return j['result']
+
+    async def get_decimals(self, contract):
+        d = await self.get_invokefunction(contract, 'decimals')
+        if 'state' in d.keys() and d['state'].startswith('HALT'):
+            if d['stack'][0]['value']:
+                return int(d['stack'][0]['value'])
+            return 0
+        logger.error('Can not get the decimals of {}'.format(contract))
+        sys.exit(1)
 
     async def update_status(self, height):
         sql="INSERT INTO status(name,update_height) VALUES ('%s',%s) ON DUPLICATE KEY UPDATE update_height=%s;" % (self.name,height,height)
