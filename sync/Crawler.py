@@ -224,6 +224,15 @@ class Crawler:
             j = await resp.json()
             return j['result']
 
+    async def get_transaction(self, txid):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'getrawtransaction','params':[txid,1],'id':1}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to fetch transaction {}'.format(txid))
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']
+
     async def get_mysql_pool(self):
         try:
             logger.info('start to connect db')
