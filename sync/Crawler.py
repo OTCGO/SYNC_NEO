@@ -318,8 +318,8 @@ class Crawler:
                 if stop >= current_height:
                     stop = current_height
                 self.processing.extend([i for i in range(self.start,stop)])
-                max_height = max(self.processing)
-                min_height = self.processing[0]
+                self.max_height = max(self.processing)
+                self.min_height = self.processing[0]
                 await asyncio.wait([self.cache_block(h) for h in self.processing])
                 if self.processing != sorted(self.cache.keys()):
                     msg = 'can not cache so much blocks one time(cache != processing)'
@@ -334,9 +334,9 @@ class Crawler:
 
                 time_b = CT.now()
                 logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
-                        (max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
-                await self.update_status(max_height)
-                self.start = max_height + 1
+                        (self.max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
+                await self.update_status(self.max_height)
+                self.start = self.max_height + 1
                 del self.processing
                 del self.cache
                 self.processing = []

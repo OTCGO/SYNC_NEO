@@ -6,77 +6,15 @@
 import sys
 import uvloop
 import asyncio
-import aiohttp
-import aiomysql
-from random import randint
-from logzero import logger
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+from logzero import logger
+from Crawler import Crawler
 from Config import Config as C
-from CommonTool import CommonTool as CT
-from pytz import utc
 
 
-class Crawler:
-    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
-        self.start_time = CT.now()
-        self.mysql_args = mysql_args
-        self.max_tasks = int(tasks)
-        self.neo_uri = neo_uri
-        self.loop = loop
-        self.processing = []
-        self.cache = {}
-        self.session = aiohttp.ClientSession(loop=loop)
-        self.super_node_uri = super_node_uri
-        self.scheduler = AsyncIOScheduler(job_defaults = {
-                        'coalesce': True,
-                        'max_instances': 1,
-                        'misfire_grace_time': 2
-            })
-        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri', timezone=utc)
-        self.scheduler.start()
-
-    async def get_super_node_info(self):
-        async with self.session.get(self.super_node_uri) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch supernode info')
-                sys.exit(1)
-            j = await resp.json()
-            return j
-
-    async def update_neo_uri(self):
-        heightA = await self.get_block_count()
-        info = await self.get_super_node_info()
-        heightB = info['height']
-        if heightA < heightB:
-            self.neo_uri = info['fast'][randint(0,len(info['fast'])-1)]
-        logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
-
-    async def get_block(self, height):
-        async with self.session.post(self.neo_uri,
-                json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch block {}'.format(height))
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
-
-    async def get_block_count(self):
-        async with self.session.post(self.neo_uri,
-                json={'jsonrpc':'2.0','method':'getblockcount','params':[],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch blockcount')
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
-
-    async def get_utxo_state(self):
-        result = await self.state.find_one({'_id':'height'})
-        if not result:
-            await self.state.insert_one({'_id':'height','value':-1})
-            return -1
-        else:
-            return result['value']
+class UTXO(Crawler):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+        super(Asset,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     async def get_total_sys_fee(self, height):
         if -1 == height: return 0
@@ -87,9 +25,6 @@ class Crawler:
             raise Exception(msg)
             sys.exit(1)
         return result['total_sys_fee']
-
-    async def update_state(self, height):
-        await self.state.update_one({'_id':'height'}, {'$set': {'value':height}}, upsert=True)
 
     async def update_a_vin(self, vin, txid, height):
         _id = vin['txid'] + '_' + str(vin['vout'])
@@ -139,9 +74,6 @@ class Crawler:
                 }
         await self.blocks.update_one({'_id':_id}, {'$set':ud}, upsert=True)
 
-    async def cache_block(self, height):
-        self.cache[height] = await self.get_block(height)
-
     async def update_sys_fee(self, min_height):
         base_sys_fee = await self.get_total_sys_fee(min_height - 1)
         for h in self.processing:
@@ -166,81 +98,38 @@ class Crawler:
     async def update_addresses(self, height, uas):
         await self.state.update_one({'_id':'update'}, {'$set': {'height':height,'value':uas}}, upsert=True)
 
-    async def infinite_loop(self):
-        while True:
-            current_height = await self.get_block_count()
-            time_a = CT.now()
-            if self.start < current_height:
-                stop = self.start + self.max_tasks
-                if stop >= current_height:
-                    stop = current_height
-                self.processing.extend([i for i in range(self.start,stop)])
-                max_height = max(self.processing)
-                min_height = self.processing[0]
-                await asyncio.wait([self.cache_block(h) for h in self.processing])
-                if self.processing != sorted(self.cache.keys()):
-                    msg = 'cache != processing'
-                    logger.error(msg)
-                    raise Exception(msg)
-                    sys.exit(1)
-                await self.update_sys_fee(min_height)
-                vins = []
-                vouts = []
-                claims = []
-                for block in self.cache.values():
-                    for tx in block['tx']:
-                        txid = tx['txid']
-                        height = block['index']
-                        for vin in tx['vin']:
-                            vins.append([vin, txid, height])
-                        for vout in tx['vout']:
-                            vouts.append([vout, txid, height])
-                        if 'claims' in tx.keys():
-                            for claim in tx['claims']:
-                                claims.append([claim, txid, height])
-                if vins:
-                    await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
-                if vouts:
-                    await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
-                if claims:
-                    await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
+    async def deal_with(self):
+        await self.update_sys_fee(min_height)
+        vins = []
+        vouts = []
+        claims = []
+        for block in self.cache.values():
+            for tx in block['tx']:
+                txid = tx['txid']
+                height = block['index']
+                for vin in tx['vin']:
+                    vins.append([vin, txid, height])
+                for vout in tx['vout']:
+                    vouts.append([vout, txid, height])
+                if 'claims' in tx.keys():
+                    for claim in tx['claims']:
+                        claims.append([claim, txid, height])
+        if vins:
+            await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
+        if vouts:
+            await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
+        if claims:
+            await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
 
-                #cache update addresses
-                if stop == current_height and 1 == len(self.processing):
-                    uas = []
-                    vinas = await asyncio.gather(*[self.get_address_from_vin(vin[0]) for vin in vins])
-                    voutas = [vout[0]['address'] for vout in vouts]
-                    uas = list(set(vinas + voutas))
-                    await self.update_addresses(max_height, uas)
+        #cache update addresses
+        if stop == current_height and 1 == len(self.processing):
+            uas = []
+            vinas = await asyncio.gather(*[self.get_address_from_vin(vin[0]) for vin in vins])
+            voutas = [vout[0]['address'] for vout in vouts]
+            uas = list(set(vinas + voutas))
+            await self.update_addresses(max_height, uas)
 
-                time_b = CT.now()
-                logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
-                        (max_height, time_b-time_a, stop-self.start, time_b-START_TIME))
-                await asyncio.wait([self.update_block(block) for block in self.cache.values()])
-                await self.update_state(max_height)
-                self.start = max_height + 1
-                del self.processing
-                del self.cache
-                self.processing = []
-                self.cache = {}
-            else:
-               await asyncio.sleep(0.5)
-
-    async def crawl(self):
-        self.pool = await self.get_mysql_pool()
-        if not self.pool:
-            sys.exit(1)
-        try:
-            self.start = await self.get_utxo_state()
-            self.start += 1
-            logger.info('start infinite loop from height: %s' % self.start)
-            await self.infinite_loop()
-        except Exception as e:
-            logger.error('CRAWL EXCEPTION: {}'.format(e.args[0]))
-        finally:
-            self.pool.close()
-            await self.pool.wait_closed()
-            await self.session.close()
+        await asyncio.wait([self.update_block(block) for block in self.cache.values()])
 
 
 if __name__ == "__main__":
@@ -257,10 +146,10 @@ if __name__ == "__main__":
     super_node_uri  = C.get_super_node()
     tasks           = C.get_tasks()
 
-    crawler = Crawler(mysql_args, neo_uri, loop, super_node_uri, tasks)
+    u = UTXO('utxo', mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     try:
-        loop.run_until_complete(crawler.crawl())
+        loop.run_until_complete(u.crawl())
     except Exception as e:
         logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
     finally:
