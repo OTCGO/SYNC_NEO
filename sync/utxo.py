@@ -43,15 +43,16 @@ class UTXO(Crawler):
             block['total_sys_fee'] += block['sys_fee']
             base_sys_fee = block['total_sys_fee']
 
-    async def get_address_from_vin(self, vin):
+    async def get_address_info_from_vin(self, vin):
         conn, cur = await self.get_mysql_cursor()
         try:
-            await cur.execute("select address from utxos where txid='%s' and index_n=%s;" % (vin['txid'],vin['vout']))
+            await cur.execute("select address,asset from utxos where txid='%s' and index_n=%s;" % (vin['txid'],vin['vout']))
             result = await cur.fetchone()
             if result:
-                a = result[0]
-                logger.info('database utxos height: %s' % a)
-                return a
+                addr = result[0]
+                asset = result[1]
+                logger.info('from utxos get address:%s, asset:%s' % (addr,asset))
+                return addr,asset
             logger.error('Unable to get utxos {}'.format(vin['txid']))
             sys.exit(1)
         except Exception as e:
@@ -61,7 +62,9 @@ class UTXO(Crawler):
             await self.pool.release(conn)
 
     async def update_addresses(self, height, uas):
-        await self.state.update_one({'_id':'update'}, {'$set': {'height':height,'value':uas}}, upsert=True)
+        sql = "INSERT INTO upt(address,asset,update_height) VALUES ('%s','%s',%s) ON DUPLICATE KEY UPDATE update_height=%s"
+        data = [(ua[0],ua[1],height,height) for ua in uas]
+        await self.mysql_insert_many(sql, data)
 
     async def deal_with(self):
         await self.update_sys_fee()
@@ -86,13 +89,11 @@ class UTXO(Crawler):
         if claims:
             await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
 
-        #cache update addresses
-        if stop == current_height and 1 == len(self.processing):
-            uas = []
-            vinas = await asyncio.gather(*[self.get_address_from_vin(vin[0]) for vin in vins])
-            voutas = [vout[0]['address'] for vout in vouts]
-            uas = list(set(vinas + voutas))
-            await self.update_addresses(max_height, uas)
+        uas = []
+        vinas = await asyncio.gather(*[self.get_address_info_from_vin(vin[0]) for vin in vins])
+        voutas = [vout[0]['address'],vout[0]['asset'] for vout in vouts]
+        uas = list(set(vinas + voutas))
+        await self.update_addresses(self.max_height, uas)
 
         await asyncio.wait([self.update_block(block) for block in self.cache.values()])
 

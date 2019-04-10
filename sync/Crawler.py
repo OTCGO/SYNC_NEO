@@ -324,6 +324,20 @@ class Crawler:
         finally:
             await self.pool.release(conn)
 
+    async def mysql_insert_many(self, sql, data):
+        conn, cur = await self.get_mysql_cursor()
+        logger.info('SQL MANY:%s' % sql)
+        try:
+            await cur.executemany(sql, data)
+            num = cur.rowcount
+            #logger.info('%s row affected' % num)
+            return num
+        except Exception as e:
+            logger.error("mysql INSERT failure:{}".format(e.args[0]))
+            sys.exit(1)
+        finally:
+            await self.pool.release(conn)
+
     async def deal_with(self):
         pass
 
