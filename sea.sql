@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS history (
   INDEX idx_address_tp_op_value_asset (address, timepoint, operation, value, asset)
 );
 
+CREATE TABLE IF NOT EXISTS block (
+  height INT UNSIGNED,
+  sys_fee INT UNSIGNED NOT NULL,
+  total_sys_fee INT UNSIGNED NOT NULL,
+  PRIMARY KEY (height)
+);
+
 CREATE TABLE IF NOT EXISTS utxos (
   id INT UNSIGNED AUTO_INCREMENT,
   txid CHAR(66) NOT NULL,
@@ -38,7 +45,9 @@ CREATE TABLE IF NOT EXISTS utxos (
   height INT UNSIGNED NOT NULL,
   spent_txid CHAR(66) DEFAULT NULL,
   spent_height INT UNSIGNED DEFAULT NULL,
-  status TINYINT UNSIGNED DEFAULT 1 NOT NULL,
+  claim_txid CHAR(66) DEFAULT NULL,
+  claim_height INT UNSIGNED DEFAULT NULL,
+  status TINYINT UNSIGNED DEFAULT 1 NOT NULL, #0 unavailable 1 available 2 freeze
   PRIMARY KEY (id),
   UNIQUE INDEX uidx_txid_index (txid, index_n),
   INDEX idx_address_asset_status_value_index_txid (address, asset, status, value, index_n, txid)

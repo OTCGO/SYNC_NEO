@@ -267,6 +267,24 @@ class Crawler:
         finally:
             await self.pool.release(conn)
 
+    async def get_total_sys_fee(self, height):
+        if -1 == height: return 0
+        conn, cur = await self.get_mysql_cursor()
+        try:
+            await cur.execute("select total_sys_fee from block where height=%s;" % height)
+            result = await cur.fetchone()
+            if result:
+                h = result[0]
+                logger.info('database block height: %s' % h)
+                return h
+            logger.error('Unable to get block {}'.format(height))
+            sys.exit(1)
+        except Exception as e:
+            logger.error("mysql SELECT failure:{}".format(e.args[0]))
+            sys.exit(1)
+        finally:
+            await self.pool.release(conn)
+
     async def get_invokefunction(self, contract, func):
         async with self.session.post(self.neo_uri,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
