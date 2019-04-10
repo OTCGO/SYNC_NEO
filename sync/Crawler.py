@@ -338,6 +338,12 @@ class Crawler:
         finally:
             await self.pool.release(conn)
 
+    async def update_addresses(self, height, uas):
+        sql = "INSERT INTO upt(address,asset,update_height) VALUES ('%s','%s',%s) ON DUPLICATE KEY UPDATE update_height=%s"
+        data = [(ua[0],ua[1],height,height) for ua in uas]
+        await self.mysql_insert_many(sql, data)
+
+
     async def deal_with(self):
         pass
 

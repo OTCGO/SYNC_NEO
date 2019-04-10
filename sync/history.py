@@ -156,10 +156,16 @@ class History(Crawler):
             await asyncio.wait([self.update_a_gvin(*vin) for vin in gvins])
         if gvouts:
             await asyncio.wait([self.update_a_gvout(*vout) for vout in gvouts])
+        uas = []
         if svins:
             await asyncio.wait([self.update_a_svin(*vin) for vin in svins])
+            uas = [(vin[3],vin[0]) for vin in svins]
         if svouts:
             await asyncio.wait([self.update_a_svout(*vout) for vout in svouts])
+            uas.extend([(vout[3],vout[0]) for vout in svouts])
+        uas = list(set(uas))
+        if uas:
+            await self.update_addresses(self.max_height, uas)
 
         del self.cache_utxo
         self.cache_utxo = {}
