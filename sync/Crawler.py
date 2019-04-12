@@ -13,7 +13,7 @@ import hashlib
 from random import randint
 from binascii import hexlify, unhexlify
 from logzero import logger
-from base58 import b58encode
+from base58 import b58encode, b58decode
 from decimal import Decimal as D
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -74,6 +74,10 @@ class Crawler:
         result = b58encode(tmp + cls.hash256(tmp)[:4])
         if isinstance(result, bytes): result = result.decode('utf8')
         return result
+
+    @staticmethod
+    def address_to_scripthash(address):
+        return hexlify(b58decode(address)[1:-4]).decode('utf-8')
 
     @staticmethod
     def bytes_to_num(bs):
@@ -294,6 +298,15 @@ class Crawler:
             j = await resp.json()
             return j['result']
 
+    async def get_invokefunction_with_extra_arg(self, contract, func, arg):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func, arg],'id':1}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to get invokefunction')
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']
+
     async def get_decimals(self, contract):
         d = await self.get_invokefunction(contract, 'decimals')
         if 'state' in d.keys() and d['state'].startswith('HALT'):
@@ -302,6 +315,22 @@ class Crawler:
             return 0
         logger.error('Can not get the decimals of {}'.format(contract))
         sys.exit(1)
+
+    async def get_nep5_balance(self, contract, address):
+        d = await self.get_invokefunction(contract, 'balanceOf', [{'type':'Hash160','value':CT.big_or_little(self.address_to_scripthash(address))}])
+        if 'state' in d.keys() and d['state'].startswith('HALT'):
+            return d['stack'][0] #eg:{"type":"ByteArray","value":""} or {"type":"ByteArray","value":"159a390f"}
+        logger.error('Can not get the balanceOf {}-{}'.format(contract,address))
+        sys.exit(1)
+
+    async def get_global_balance(self, address):
+        async with self.session.post(self.neo_uri,
+                json={'jsonrpc':'2.0','method':'getaccountstate','params':[address],'id':10}) as resp:
+            if 200 != resp.status:
+                logger.error('Unable to getaccountstate {}, http status: {}'.format(address, resp.status))
+                sys.exit(1)
+            j = await resp.json()
+            return j['result']['balances']
 
     async def update_status(self, height):
         sql="INSERT INTO status(name,update_height) VALUES ('%s',%s) ON DUPLICATE KEY UPDATE update_height=%s;" % (self.name,height,height)
@@ -320,6 +349,18 @@ class Crawler:
             return num
         except Exception as e:
             logger.error("mysql INSERT failure:{}".format(e.args[0]))
+            sys.exit(1)
+        finally:
+            await self.pool.release(conn)
+
+    async def mysql_query_one(self, sql):
+        conn, cur = await self.get_mysql_cursor()
+        logger.info('SQL:%s' % sql)
+        try:
+            await cur.execute(sql)
+            return await cur.fetchall()
+        except Exception as e:
+            logger.error("mysql QUERY failure:{}".format(e.args[0]))
             sys.exit(1)
         finally:
             await self.pool.release(conn)

@@ -15,37 +15,61 @@ from Config import Config as C
 class UPT(Crawler):
     def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
         super(Asset,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        self.cache_decimals = {}
+        self.cache_balances = {}
+
+    async def get_address_info_to_update(self):
+        sql = "SELECT address,asset FROM upt where update_height < %s limit %s;" % (current_height, self.tasks)
+        return await self.mysql_query_one(sql)
+
+    async def get_cache_decimals(self, contract):
+        if contract not in self.cache_decimals.keys():
+            self.cache_decimals[contract] = await self.get_decimals(contract)
+        return self.cache_decimals[contract]
+    
+    async def get_cache_global_balance(self, address):
+        if address not in self.cache_balances.keys():
+            self.cache_balances[address] = await self.get_global_balance(address)
+        return self.cache_balances[address]
+
+    async def get_balance(self, address, asset):
+        if 40 == len(asset):#nep5
+            b = await self.get_nep5_balance(asset,address)
+            if 0 == len(b['value']: return '0'
+            if 'ByteArray' == b['type']:
+                return self.hex_to_num_str(b['value'], decimals=await self.get_cache_decimals(asset))
+            if 'Integer' == b['type']:
+                return self.integer_to_num_str(b['value'], decimals=await self.get_cache_decimals(asset))
+            sys.exit(1)
+        if 64 == len(asset):#global
+            asset = '0x' + asset
+            b = await self.get_cache_global_balance(address)
+            for i in b:
+                if asset == i['asset']: return i['value']
+            return '0'
+        sys.exit(1)
+
+    async def update_address_balances(self, data):
+        sql = "INSERT INTO balance(address,asset,value,last_updated_height) VALUES ('%s','%s','%s',%s) ON DUPLICATE KEY UPDATE value='%s',last_updated_height=%s"
+        await self.mysql_insert_many(sql, data)
 
     async def infinite_loop(self):
         while True:
-            current_height = await self.get_block_count()
             time_a = CT.now()
-            if self.start < current_height:
-                stop = self.start + self.max_tasks
-                if stop >= current_height:
-                    stop = current_height
-                self.processing.extend([i for i in range(self.start,stop)])
-                self.max_height = max(self.processing)
-                self.min_height = self.processing[0]
-                await asyncio.wait([self.cache_block(h) for h in self.processing])
-                if self.processing != sorted(self.cache.keys()):
-                    msg = 'can not cache so much blocks one time(cache != processing)'
-                    logger.error(msg)
-                    self.max_tasks -= 10
-                    if self.max_tasks > 0:
-                        continue
-                    else:
-                        sys.exit(1)
+            current_height = await self.get_block_count()
+            upts = await self.get_address_info_to_update()
+            if upts:
+                result = await asyncio.gather(*[self.get_balance(*upt) for upt in upts]) 
+                data = []
+                for i in range(len(upts)):
+                    upt = upts[i]
+                    address = upt[0]
+                    asset = upt[1]
+                    r = result[i]
+                    data.append((address,asset,r,current_height))
+                await self.update_address_balances(data)
 
-                time_b = CT.now()
-                logger.info('reached %s ,cost %.6fs to sync %s blocks ,total cost: %.6fs' % 
-                        (self.max_height, time_b-time_a, stop-self.start, time_b-self.start_time))
-                await self.update_status(self.max_height)
-                self.start = self.max_height + 1
-                del self.processing
-                del self.cache
-                self.processing = []
-                self.cache = {}
+                self.cache_balances = {}
             else:
                await asyncio.sleep(0.5)
 
