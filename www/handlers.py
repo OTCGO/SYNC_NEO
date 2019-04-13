@@ -1,10 +1,10 @@
 import os
+import sys
 import json
 import asyncio
 from coreweb import get, post, options
 from aiohttp import web
 from decimal import Decimal as D
-from pymongo import DESCENDING
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
@@ -59,7 +59,6 @@ def valid_domain(domain, request):
     return True
 
 def get_asset_decimal(asset):
-    if asset['type'] in GLOBAL_TYPES: return asset["precision"]
     try:
         return int(asset['decimals'])
     except:
@@ -91,6 +90,7 @@ async def send_raw_transaction(tx, request):
         return j['result'],''
 
 async def get_nep5_asset_balance(request, address, asset, decimals=8):
+    #pass
     result = await get_rpc(request, 'invokefunction',
             [asset, "balanceOf", [{"type":"Hash160","value":big_or_little(Tool.address_to_scripthash(address))}]])
     if result and "HALT, BREAK" == result["state"]:
@@ -108,6 +108,7 @@ async def get_resolve_address(resolve_invoke, request):
     return ''
 
 async def get_multi_nep5_balance(request, address, assets):
+    #pass
     result = {}
     for asset in assets:
         try:
@@ -121,6 +122,7 @@ async def get_multi_nep5_balance(request, address, assets):
     return result
 
 async def get_utxo(request, address, asset):
+    #pass
     if not asset.startswith('0x'): asset = '0x' + asset
     result = []
     cursor = request.app['db'].utxos.find({'address':address, 'asset':asset, 'spent_height':None})
@@ -131,11 +133,13 @@ async def get_utxo(request, address, asset):
     return result
 
 async def get_global_asset_balance(request, address, asset):
+    #pass
     if not asset.startswith('0x'): asset = '0x' + asset
     utxo = await get_utxo(request, address, asset)
     return sci_to_str(str(sum([D(i['value']) for i in utxo])))
 
 async def get_all_utxo(request, address):
+    #pass
     result = {}
     cursor = request.app['db'].utxos.find({'address':address,'spent_height':None})
     for doc in await cursor.to_list(None):
@@ -146,12 +150,30 @@ async def get_all_utxo(request, address):
         result[asset].append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
     return result
 
+async def get_mysql_cursor(request):
+    conn = await request.app['pool'].acquire()
+    cur  = await conn.cursor()
+    return conn, cur
+
 async def get_asset_state(request):
-    result = await request.app['db'].state.find_one({'_id':'asset'})
-    if not result: return -1
-    return result['value']
+    conn, cur = await get_mysql_cursor(request)
+    try:
+        await cur.execute("select update_height from status where name='asset';")
+        result = await cur.fetchone()
+        if result:
+            uh = result[0]
+            logging.info('database asset height: %s' % uh)
+            return uh
+        logging.info('database asset height: -1')
+        return -1
+    except Exception as e:
+        logging.error("mysql SELECT failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        await request.app['pool'].release(conn)
 
 async def get_all_global(request):
+    #pass
     result = []
     cursor = request.app['db'].assets.find({"type":{"$in":GLOBAL_TYPES}})
     for doc in await cursor.to_list(None):
@@ -161,6 +183,7 @@ async def get_all_global(request):
     return result
 
 async def get_all_nep5(request):
+    #pass
     result = []
     seas = {}
     seac = {}
@@ -180,6 +203,7 @@ async def get_all_nep5(request):
     return result
 
 async def get_all_ontology(request):
+    #pass
     result = []
     cursor = request.app['db'].assets.find({'type':'ONTOLOGY'})
     for doc in await cursor.to_list(None):
@@ -237,9 +261,10 @@ def index(request):
 
 @get('/{net}/height')
 async def height(net, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    return {'height':await request.app['redis'].get('height')}
+    if not valid_net(net, request): return {'result':False,'error':'wrong net'}
+    return {'result':True, 'height':request.app['cache'].get('height')}
 
+'''
 @get('/{net}/asset')
 async def asset(net, request, *, id=0):
     if not valid_net(net, request): return {'error':'wrong net'}
@@ -593,3 +618,4 @@ async def gas_options(net, request):
 async def broadcast_options(net, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
+'''
