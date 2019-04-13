@@ -389,6 +389,11 @@ class Crawler:
         #await self.mysql_insert_many(sql, data)
         await asyncio.gather(*[self.mysql_insert_one(sql % d) for d in data])
 
+    async def update_upts(self, upts, height):
+        sql = "DELETE FROM upt where address='%s' AND asset='%s' AND update_height<%s;"
+        data = [(upt[0], upt[1], height) for upt in upts]
+        await asyncio.gather(*[self.mysql_insert_one(sql % d) for d in data])
+
     async def deal_with(self):
         pass
 

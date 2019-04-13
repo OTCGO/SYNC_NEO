@@ -13,13 +13,13 @@ from Config import Config as C
 
 
 class UPT(Crawler):
-    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='100'):
         super(UPT,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
         self.cache_decimals = {}
         self.cache_balances = {}
 
-    async def get_address_info_to_update(self):
-        sql = "SELECT address,asset FROM upt where update_height < %s limit %s;" % (current_height, self.tasks)
+    async def get_address_info_to_update(self, height):
+        sql = "SELECT address,asset FROM upt where update_height < %s limit %s;" % (height, self.max_tasks)
         return await self.mysql_query_one(sql)
 
     async def get_cache_decimals(self, contract):
@@ -35,7 +35,7 @@ class UPT(Crawler):
     async def get_balance(self, address, asset):
         if 40 == len(asset):#nep5
             b = await self.get_nep5_balance(asset,address)
-            if 0 == len(b['value']: return '0'
+            if 0 == len(b['value']): return '0'
             if 'ByteArray' == b['type']:
                 return self.hex_to_num_str(b['value'], decimals=await self.get_cache_decimals(asset))
             if 'Integer' == b['type']:
@@ -52,9 +52,8 @@ class UPT(Crawler):
 
     async def infinite_loop(self):
         while True:
-            time_a = CT.now()
             current_height = await self.get_block_count()
-            upts = await self.get_address_info_to_update()
+            upts = await self.get_address_info_to_update(current_height)
             if upts:
                 result = await asyncio.gather(*[self.get_balance(*upt) for upt in upts]) 
                 data = []
@@ -63,8 +62,9 @@ class UPT(Crawler):
                     address = upt[0]
                     asset = upt[1]
                     r = result[i]
-                    data.append((address,asset,r,current_height))
+                    data.append((address,asset,r,current_height,r,current_height))
                 await self.update_address_balances(data)
+                await self.update_upts(upts, current_height)
 
                 self.cache_balances = {}
             else:
@@ -96,9 +96,8 @@ if __name__ == "__main__":
     neo_uri         = C.get_neo_uri()
     loop            = asyncio.get_event_loop()
     super_node_uri  = C.get_super_node()
-    tasks           = C.get_tasks()
 
-    u = UPT('utxo', mysql_args, neo_uri, loop, super_node_uri, tasks)
+    u = UPT('utxo', mysql_args, neo_uri, loop, super_node_uri)
 
     try:
         loop.run_until_complete(u.crawl())
