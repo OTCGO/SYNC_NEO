@@ -44,11 +44,11 @@ class History(Crawler):
             self.cache_log[txid] = j
 
     async def update_a_gvin(self, vin, txid, index, utc_time):
-        sql="""INSERT IGNORE INTO history(txid,operation,index_n,address,value,timepoint,asset) VALUES ('%s','%s',%s,'%s','%s',%s,'%s');""" % (txid,'out',index,vin['address'],vin['value'],utc_time,vin['asset'])
+        sql="""INSERT IGNORE INTO history(txid,operation,index_n,address,value,timepoint,asset) VALUES ('%s','%s',%s,'%s','%s',%s,'%s');""" % (txid,'out',index,vin['address'],vin['value'],utc_time,vin['asset'][2:])
         await self.mysql_insert_one(sql)
 
     async def update_a_gvout(self, vout, txid, index, utc_time):
-        sql="""INSERT IGNORE INTO history(txid,operation,index_n,address,value,timepoint,asset) VALUES ('%s','%s',%s,'%s','%s',%s,'%s');""" % (txid,'in',index,vout['address'],vout['value'],utc_time,vout['asset'])
+        sql="""INSERT IGNORE INTO history(txid,operation,index_n,address,value,timepoint,asset) VALUES ('%s','%s',%s,'%s','%s',%s,'%s');""" % (txid,'in',index,vout['address'],vout['value'],utc_time,vout['asset'][2:])
         await self.mysql_insert_one(sql)
 
     async def update_a_svin(self, asset, txid, index, address, value, utc_time):
@@ -60,8 +60,8 @@ class History(Crawler):
         await self.mysql_insert_one(sql)
 
     async def deal_with(self):
-        gtxids = [] //global
-        stxids = [] //smart contract
+        gtxids = [] #global
+        stxids = [] #smart contract
         for block in self.cache.values():
             for tx in block['tx']:
                 for vin in tx['vin']:
@@ -89,7 +89,7 @@ class History(Crawler):
         for block in self.cache.values():
             block_time = block['time']
             for tx in block['tx']:
-                //global
+                #global
                 utxo_dict = {}
                 for vin in tx['vin']:
                     utxo = self.cache_utxo[vin['txid']][vin['vout']]
@@ -127,7 +127,7 @@ class History(Crawler):
                     vout = voutx[k]
                     gvouts.append([vout, tx['txid'], k, block_time])
 
-                //smart contract
+                #smart contract
                 txid = tx['txid']
                 if 'InvocationTransaction' == tx['type']:
                     log = self.cache_log[txid]
