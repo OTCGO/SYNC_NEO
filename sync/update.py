@@ -14,7 +14,7 @@ from Config import Config as C
 
 class UPT(Crawler):
     def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
-        super(Asset,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        super(UPT,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
         self.cache_decimals = {}
         self.cache_balances = {}
 
@@ -49,9 +49,6 @@ class UPT(Crawler):
             return '0'
         sys.exit(1)
 
-    async def update_address_balances(self, data):
-        sql = "INSERT INTO balance(address,asset,value,last_updated_height) VALUES ('%s','%s','%s',%s) ON DUPLICATE KEY UPDATE value='%s',last_updated_height=%s"
-        await self.mysql_insert_many(sql, data)
 
     async def infinite_loop(self):
         while True:

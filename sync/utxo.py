@@ -14,14 +14,14 @@ from Config import Config as C
 
 class UTXO(Crawler):
     def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
-        super(Asset,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        super(UTXO,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     async def update_a_vin(self, vin, txid, height):
-        sql="""UPDATE utxos SET spent_txid='%s',spent_height=%s WHERE txid='%s' AND index_n=%s and status=1;""" % (txid,height,vin['txid'],vin['vout'])
+        sql="""UPDATE utxos SET spent_txid='%s',spent_height=%s,status=0 WHERE txid='%s' AND index_n=%s AND status=1;""" % (txid,height,vin['txid'],vin['vout'])
         await self.mysql_insert_one(sql)
 
     async def update_a_vout(self, vout, txid, height):
-        sql="""INSERT IGNORE INTO utxos(txid,index_n,address,value,asset,height) VALUES ('%s',%s,'%s','%s','%s',%s);""" % (txid,vout['n'],vout['address'],vout['value'],vout['asset'],height)
+        sql="""INSERT IGNORE INTO utxos(txid,index_n,address,value,asset,height) VALUES ('%s',%s,'%s','%s','%s',%s);""" % (txid,vout['n'],vout['address'],vout['value'],vout['asset'][2:],height)
         await self.mysql_insert_one(sql)
 
     async def update_a_claim(self, claim, txid, height):
@@ -86,9 +86,9 @@ class UTXO(Crawler):
 
         uas = []
         vinas = await asyncio.gather(*[self.get_address_info_from_vin(vin[0]) for vin in vins])
-        voutas = [vout[0]['address'],vout[0]['asset'] for vout in vouts]
+        voutas = [(vout[0]['address'],vout[0]['asset'][2:]) for vout in vouts]
         uas = list(set(vinas + voutas))
-        await self.update_addresses(self.max_height, uas)
+        if uas: await self.update_addresses(self.max_height, uas)
 
         await asyncio.wait([self.update_block(block) for block in self.cache.values()])
 

@@ -261,9 +261,9 @@ class Crawler:
             result = await cur.fetchone()
             if result:
                 uh = result[0]
-                logger.info('database asset height: %s' % uh)
+                logger.info('database %s height: %s' % (self.name,uh))
                 return uh
-            logger.info('database asset height: -1')
+            logger.info('database %s height: -1' % self.name)
             return -1
         except Exception as e:
             logger.error("mysql SELECT failure:{}".format(e.args[0]))
@@ -382,8 +382,12 @@ class Crawler:
     async def update_addresses(self, height, uas):
         sql = "INSERT INTO upt(address,asset,update_height) VALUES ('%s','%s',%s) ON DUPLICATE KEY UPDATE update_height=%s"
         data = [(ua[0],ua[1],height,height) for ua in uas]
-        await self.mysql_insert_many(sql, data)
+        await asyncio.gather(*[self.mysql_insert_one(sql % d) for d in data])
 
+    async def update_address_balances(self, data):
+        sql = "INSERT INTO balance(address,asset,value,last_updated_height) VALUES ('%s','%s','%s',%s) ON DUPLICATE KEY UPDATE value='%s',last_updated_height=%s"
+        #await self.mysql_insert_many(sql, data)
+        await asyncio.gather(*[self.mysql_insert_one(sql % d) for d in data])
 
     async def deal_with(self):
         pass
