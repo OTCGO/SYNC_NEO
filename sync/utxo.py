@@ -17,7 +17,7 @@ class UTXO(Crawler):
         super(UTXO,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     async def update_a_vin(self, vin, txid, height):
-        sql="""UPDATE utxos SET spent_txid='%s',spent_height=%s,status=0 WHERE txid='%s' AND index_n=%s AND status=1;""" % (txid,height,vin['txid'],vin['vout'])
+        sql="""UPDATE utxos SET spent_txid='%s',spent_height=%s,status=0 WHERE txid='%s' AND index_n=%s;""" % (txid,height,vin['txid'],vin['vout'])
         await self.mysql_insert_one(sql)
 
     async def update_a_vout(self, vout, txid, height):
