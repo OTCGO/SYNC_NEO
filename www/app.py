@@ -15,6 +15,7 @@ from coreweb import add_routes
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC, CSEAS, CSEAC
 
 
 
@@ -122,6 +123,48 @@ async def update_height(pool, cache):
     if old is None or int(old) < height:
         cache.set('height',height)
 
+async def get_asset_state(pool):
+    conn, cur = await get_mysql_cursor(pool)
+    try:
+        await cur.execute("select update_height from status where name='asset';")
+        result = await cur.fetchone()
+        if result:
+            uh = result[0]
+            logging.info('database asset height: %s' % uh)
+            return uh
+        logging.info('database asset height: -1')
+        return -1
+    except exception as e:
+        logging.error("mysql select failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        await pool.release(conn)
+
+async def update_assets(pool, cache):
+    assets = {'state':await get_asset_state(pool), 'GLOBAL':{}, 'NEP5':{}, 'OEP4':{}}
+    conn, cur = await get_mysql_cursor(pool)
+    try:
+        await cur.execute("select asset,type,name,symbol,decimals from assets;")
+        result = await cur.fetchall()
+        if result:
+            for r in result:
+                if r[1] in GLOBAL_TYPES:
+                    assets['GLOBAL'][r[0]]  = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
+                elif 'NEP5' == r[1]:
+                    assets['NEP5'][r[0]]    = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
+                elif 'OEP4' == r[1]:
+                    assets['GLOBAL'][r[0]]  = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
+    except Exception as e:
+        logging.error("mysql SELECT failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        cache.set('assets', assets)
+        await pool.release(conn)
+
+async def init_cache(app):
+    await update_height(app['pool'], app['cache'])
+    await update_assets(app['pool'], app['cache'])
+
 async def logger_factory(app, handler):
     async def logger(request):
         logging.info('request:%s %s' % (request.method, request.path))
@@ -209,13 +252,15 @@ async def init(loop):
     app['net'] = get_net()
     app['super_node_uri'] = super_node_uri
     app['cache'] = Cache()
+    await init_cache(app)
     app['ont_genesis_block_timestamp'] = get_ont_genesis_block_timestamp()
     scheduler = AsyncIOScheduler(job_defaults = {
                     'coalesce': True,
                     'max_instances': 1,
         })
-    scheduler.add_job(update_height, 'interval', seconds=1, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
+    scheduler.add_job(update_height, 'interval', seconds=2, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
     scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
+    scheduler.add_job(update_assets, 'interval', seconds=120, args=[app['pool'], app['cache']], id='update_assets', timezone=utc)
     scheduler._logger = logging
     scheduler.start()
     add_routes(app, 'handlers')

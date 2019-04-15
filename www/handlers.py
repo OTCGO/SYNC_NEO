@@ -24,6 +24,7 @@ def valid_platform(platform):
     return platform in ['ios','android']
 
 def valid_asset(asset):
+    if asset.startswith('0x'): asset = asset[2:]
     if len(asset) in [40,64]: return True
     return False
 
@@ -89,14 +90,10 @@ async def send_raw_transaction(tx, request):
             return False, j['error']['message']
         return j['result'],''
 
-async def get_nep5_asset_balance(request, address, asset, decimals=8):
-    #pass
-    result = await get_rpc(request, 'invokefunction',
-            [asset, "balanceOf", [{"type":"Hash160","value":big_or_little(Tool.address_to_scripthash(address))}]])
-    if result and "HALT, BREAK" == result["state"]:
-        hex_str = result['stack'][0]['value']
-        if hex_str: return Tool.hex_to_num_str(hex_str, decimals)
-        return '0'
+async def get_nep5_asset_balance(request, address, asset):
+    sql = "SELECT value FROM balance WHERE address='%s',asset='%s';" % (address, asset)
+    r = await mysql_query_one(request.app['pool'], sql)
+    if r: return r[0][0]
     return '0'
 
 async def get_resolve_address(resolve_invoke, request):
@@ -116,7 +113,7 @@ async def get_multi_nep5_balance(request, address, assets):
         except:
             asset['decimals'] = 8
     nep5_result = await asyncio.gather(
-            *[get_nep5_asset_balance(request, address, asset["id"], asset['decimals']) for asset in assets])
+            *[get_nep5_asset_balance(request, address, asset["id"]) for asset in assets])
     for i in range(len(assets)):
         result[assets[i]['id']] = nep5_result[i]
     return result
@@ -150,78 +147,65 @@ async def get_all_utxo(request, address):
         result[asset].append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
     return result
 
-async def get_mysql_cursor(request):
-    conn = await request.app['pool'].acquire()
+async def get_mysql_cursor(pool):
+    conn = await pool.acquire()
     cur  = await conn.cursor()
     return conn, cur
 
-async def get_asset_state(request):
-    conn, cur = await get_mysql_cursor(request)
+async def mysql_query_one(pool, sql):
+    conn, cur = await get_mysql_cursor(pool)
+    logging.info('SQL:%s' % sql)
     try:
-        await cur.execute("select update_height from status where name='asset';")
-        result = await cur.fetchone()
-        if result:
-            uh = result[0]
-            logging.info('database asset height: %s' % uh)
-            return uh
-        logging.info('database asset height: -1')
-        return -1
+        await cur.execute(sql)
+        return await cur.fetchall()
     except Exception as e:
-        logging.error("mysql SELECT failure:{}".format(e.args[0]))
+        logging.error("mysql QUERY failure:{}".format(e.args[0]))
         sys.exit(1)
     finally:
-        await request.app['pool'].release(conn)
+        await pool.release(conn)
 
-async def get_all_global(request):
-    #pass
-    result = []
-    cursor = request.app['db'].assets.find({"type":{"$in":GLOBAL_TYPES}})
-    for doc in await cursor.to_list(None):
-        doc['id'] = doc['_id']
-        del doc['_id']
-        result.append(doc)
-    return result
+async def mysql_get_block(pool, b):
+    sql = "SELECT sys_fee,total_sys_fee FROM block WHERE height=%s;" % b
+    r = await mysql_query_one(pool, sql)
+    if r: return {'sys_fee':r[0][0], 'total_sys_fee':r[0][1]}
+    return None
 
-async def get_all_nep5(request):
-    #pass
-    result = []
-    seas = {}
-    seac = {}
-    cursor = request.app['db'].assets.find({'type':'NEP5'})
-    for doc in await cursor.to_list(None):
-        doc['id'] = doc['_id']
-        del doc['_id']
-        if doc['symbol'] == 'SEAS':
-            seas = doc
-        elif doc['symbol'] == 'SEAC':
-            seac = doc
-        else:
-            result.append(doc)
-    result.sort(key=lambda k:(k.get('symbol','zzz')))
-    if seac: result.insert(0, seac)
-    if seas: result.insert(0, seas)
-    return result
+async def mysql_get_balance(request, address):
+    assets = request.app['cache'].get('assets')
+    sql = "SELECT asset,value FROM balance WHERE address='%s';" % address
+    result = await mysql_query_one(request.app['pool'], sql)
+    result = dict(result)
+    balance = {}
+    for g in assets['GLOBAL']:
+        if g not in result.keys(): balance[g] = '0'
+        else: balance[g] = result[g]
+    for n in assets['NEP5']:
+        if n not in result.keys(): balance[n] = '0'
+        else: balance[n] = result[n]
+    for o in assets['OEP4']:
+        if o not in result.keys(): balance[n] = '0'
+        else: balance[o] = result[o]
+    return balance
 
-async def get_all_ontology(request):
-    #pass
-    result = []
-    cursor = request.app['db'].assets.find({'type':'ONTOLOGY'})
-    for doc in await cursor.to_list(None):
-        doc['id'] = doc['_id']
-        del doc['_id']
-        result.append(doc)
-    return result
+def get_all_global(request):
+    return request.app['cache'].get('assets')['GLOBAL']
 
-async def get_all_asset(request):
-    results = await asyncio.gather(
-            get_asset_state(request),
-            get_all_global(request),
-            get_all_nep5(request),
-            get_all_ontology(request))
-    return {'state':results[0], 'GLOBAL':results[1], 'NEP5':results[2], 'ONTOLOGY':results[3]}
+def get_all_nep5(request):
+    return request.app['cache'].get('assets')['NEP5']
 
-async def get_an_asset(id, request):
-    return await request.app['db'].assets.find_one({'_id':id}) 
+def get_all_ontology(request):
+    return request.app['cache'].get('assets')['OEP4']
+
+def get_all_asset(request):
+    return request.app['cache'].get('assets')
+
+def get_an_asset(i, request):
+    if i.startswith('0x'): i = i[2:]
+    assets = request.app['cache'].get('assets')
+    if i in assets['GLOBAL'].keys(): return assets['GLOBAL'][i]
+    if i in assets['NEP5'].keys(): return assets['NEP5'][i]
+    if i in assets['OEP4'].keys(): return assets['OEP4'][i]
+    return None
 
 @get('/')
 def index(request):
@@ -239,7 +223,7 @@ def index(request):
                 '/{net}/claim/seas/{address}',
                 '/{net}/address/{address}',
                 '/{net}/address/ont/{address}',
-                '/{net}/asset?id={assetid}',
+                '/{net}/asset?asset={assetid}',
                 '/{net}/history/{address}?asset={assetid}&index={index}&length={length}',
                 '/{net}/resolve/{domain}',
                 ],
@@ -261,38 +245,30 @@ def index(request):
 
 @get('/{net}/height')
 async def height(net, request):
-    if not valid_net(net, request): return {'result':False,'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return {'result':True, 'height':request.app['cache'].get('height')}
 
-'''
 @get('/{net}/asset')
-async def asset(net, request, *, id=0):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if 0 == id:
-        return await get_all_asset(request)
-    if id.startswith('0x'): id = id[2:]
-    if not valid_asset(id): return {'error':'asset not exist'}
-    r = await get_an_asset(id, request)
-    if r: 
-        r['id'] = r['_id']
-        del r['_id']
-        return r
-    return {'error':'asset not exist'}
+async def asset(net, request, *, asset=0):
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if 0 == asset: return {'result':True, 'assets':get_all_asset(request)}
+    if asset.startswith('0x'): asset = asset[2:]
+    if not valid_asset(asset): return {'result':False, 'error':'asset not exist'}
+    r = get_an_asset(asset, request)
+    if r: return {'result':True, asset:r}
+    return {'result':False, 'error':'asset not exist'}
 
 @get('/{net}/block/{block}')
 async def block(net, block, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     try:
         b = int(block)
     except:
-        return {'error':'wrong arg: {}'.format(block)}
-    r = await request.app['db'].state.find_one({'_id':'height'})
-    h = r['value']
-    if b < 0 or b > h: return {'error':'not found'}
-    r = await request.app['db'].blocks.find_one({'_id':b})
-    r['index'] = r['_id']
-    del r['_id']
-    return r
+        return {'result':False, 'error':'wrong arg: {}'.format(block)}
+    if b<0: return {'result':False, 'error':'block height must >= 0'}
+    r = await mysql_get_block(request.app['pool'], b)
+    if r: return {'result':True, block:r}
+    return {'result':False, 'error':'not found'}
 
 @get('/{net}/transaction/{txid}')
 async def transaction(net, txid, request):
@@ -303,25 +279,13 @@ async def transaction(net, txid, request):
 async def address(net, address, request):
     if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
-    result = {'_id':address,'balances':{}}
-    nep5 = await get_all_nep5(request)
-    aresult = await asyncio.gather(
-            get_all_utxo(request,address),
-            get_multi_nep5_balance(request, address, nep5),
-            get_ont_balance(request, address))
-    result['utxo'] = aresult[0]
-    for k,v in result['utxo'].items():
-        result['balances'][k] = sci_to_str(str(sum([D(i['value']) for i in v])))
-    else:
-        if NEO[2:] not in result['balances'].keys(): result['balances'][NEO[2:]] = "0"
-        if GAS[2:] not in result['balances'].keys(): result['balances'][GAS[2:]] = "0"
-        if SEAS[net][2:] not in result['balances'].keys(): result['balances'][SEAS[net][2:]] = "0"
-        if SEAC[net][2:] not in result['balances'].keys(): result['balances'][SEAC[net][2:]] = "0"
-    result['balances'].update(aresult[1])
-    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult[2]['ont']
-    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult[2]['ong']
+    result = {'_id':address,'balances': await mysql_get_balance(request, address)}
+    aresult = await get_ont_balance(request, address)
+    result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult['ont']
+    result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult['ong']
     return result
 
+'''
 @get('/{net}/claim/{address}')
 async def claim(net, address, request):
     if not valid_net(net, request): return {'error':'wrong net'}
@@ -339,9 +303,9 @@ async def claim_seas(net, address, request):
     if not valid_net(net, request): return {'error':'wrong net'}
     if not Tool.validate_address(address): return {'error':'wrong address'}
     assetId = CSEAS[net][2:]
-    asset = await get_an_asset(assetId, request)
+    asset = get_an_asset(assetId, request)
     ad = get_asset_decimal(asset)
-    balance = D(await get_nep5_asset_balance(request, address, assetId, ad))
+    balance = D(await get_nep5_asset_balance(request, address, assetId))
     if balance > 0:
         r = await request.app['db'].state.find_one({'_id':'height'})
         bstorage = await get_rpc(request, 'getstorage', [CSEAS[net], Tool.address_to_scripthash(address)])
@@ -428,7 +392,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
     if assetId.startswith('0x'): assetId = assetId[2:]
     if not valid_asset(assetId): return {'result':False, 'error':'wrong assetId'}
-    asset = await get_an_asset(assetId, request)
+    asset = get_an_asset(assetId, request)
     if not asset: return {'result':False, 'error':'wrong assetId'}
     nep5_asset = global_asset = False
     if 40 == len(assetId): nep5_asset = True
@@ -450,7 +414,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     #check balance && transaction
     tran_num = sum(amounts)
     if nep5_asset:
-        balance = D(await get_nep5_asset_balance(request, source, assetId, ad))
+        balance = D(await get_nep5_asset_balance(request, source, assetId))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0], ad)
         result,msg = True,''
