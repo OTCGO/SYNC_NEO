@@ -32,7 +32,7 @@ class Crawler:
         self.loop = loop
         self.processing = []
         self.cache = {}
-        self.session = aiohttp.ClientSession(loop=loop)
+        self.session = aiohttp.ClientSession(loop=loop, headers={"Connection": "close"})
         self.super_node_uri = super_node_uri
         self.scheduler = AsyncIOScheduler(job_defaults = {
                         'coalesce': True,
