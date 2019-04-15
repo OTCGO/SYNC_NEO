@@ -6,17 +6,38 @@
 import sys
 import uvloop
 import asyncio
+import aiohttp
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from logzero import logger
 from Crawler import Crawler
 from Config import Config as C
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+from pytz import utc
 
 
 class UPT(Crawler):
-    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='100'):
-        super(UPT,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+    def __init__(self, mysql_args, neo_uri, loop, super_node_uri, tasks='100'):
+        self.mysql_args = mysql_args
+        self.max_tasks = int(tasks)
+        self.neo_uri = neo_uri
+        self.loop = loop
+        self.processing = []
+        self.cache = {}
+        conn = aiohttp.TCPConnector(limit=10000)
+        self.session = aiohttp.ClientSession(loop=loop, connector=conn, headers={"Connection": "close"},)
+        self.super_node_uri = super_node_uri
+        self.scheduler = AsyncIOScheduler(job_defaults = {
+                        'coalesce': True,
+                        'max_instances': 1,
+                        'misfire_grace_time': 2
+            })
+        self.scheduler.add_job(self.update_neo_uri, 'interval', seconds=10, args=[], id='update_neo_uri', timezone=utc)
+        self.scheduler.start()
+
         self.cache_decimals = {}
         self.cache_balances = {}
+
 
     async def get_address_info_to_update(self, height):
         sql = "SELECT address,asset FROM upt where update_height < %s limit %s;" % (height, self.max_tasks)
@@ -97,7 +118,7 @@ if __name__ == "__main__":
     loop            = asyncio.get_event_loop()
     super_node_uri  = C.get_super_node()
 
-    u = UPT('utxo', mysql_args, neo_uri, loop, super_node_uri)
+    u = UPT(mysql_args, neo_uri, loop, super_node_uri)
 
     try:
         loop.run_until_complete(u.crawl())

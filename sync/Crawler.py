@@ -317,7 +317,7 @@ class Crawler:
         sys.exit(1)
 
     async def get_nep5_balance(self, contract, address):
-        d = await self.get_invokefunction(contract, 'balanceOf', [{'type':'Hash160','value':CT.big_or_little(self.address_to_scripthash(address))}])
+        d = await self.get_invokefunction_with_extra_arg(contract, 'balanceOf', [{'type':'Hash160','value':CT.big_or_little(self.address_to_scripthash(address))}])
         if 'state' in d.keys() and d['state'].startswith('HALT'):
             return d['stack'][0] #eg:{"type":"ByteArray","value":""} or {"type":"ByteArray","value":"159a390f"}
         logger.error('Can not get the balanceOf {}-{}'.format(contract,address))
