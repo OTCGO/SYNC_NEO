@@ -54,7 +54,7 @@ class Crawler:
         heightA = await self.get_block_count()
         info = await self.get_super_node_info()
         heightB = info['height']
-        if heightA < heightB:
+        if heightA <= heightB:
             self.neo_uri = info['fast'][randint(0,len(info['fast'])-1)]
         logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
@@ -211,7 +211,7 @@ class Crawler:
                 }
 
     async def get_block(self, height):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to fetch block {}, http status: {}'.format(height, resp.status))
@@ -220,7 +220,7 @@ class Crawler:
             return j['result']
 
     async def get_block_count(self):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'getblockcount','params':[],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to fetch blockcount')
@@ -229,7 +229,7 @@ class Crawler:
             return j['result']
 
     async def get_transaction(self, txid):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'getrawtransaction','params':[txid,1],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to fetch transaction {}'.format(txid))
@@ -257,7 +257,7 @@ class Crawler:
     async def get_status(self):
         conn, cur = await self.get_mysql_cursor()
         try:
-            await cur.execute("select update_height from status where name='%s';" % self.name)
+            await cur.execute("SELECT update_height FROM status WHERE name='%s';" % self.name)
             result = await cur.fetchone()
             if result:
                 uh = result[0]
@@ -275,7 +275,7 @@ class Crawler:
         if -1 == height: return 0
         conn, cur = await self.get_mysql_cursor()
         try:
-            await cur.execute("select total_sys_fee from block where height=%s;" % height)
+            await cur.execute("SELECT total_sys_fee FROM block WHERE height=%s;" % height)
             result = await cur.fetchone()
             if result:
                 h = result[0]
@@ -290,7 +290,7 @@ class Crawler:
             await self.pool.release(conn)
 
     async def get_invokefunction(self, contract, func):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to get invokefunction')
@@ -299,7 +299,7 @@ class Crawler:
             return j['result']
 
     async def get_invokefunction_with_extra_arg(self, contract, func, arg):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func, arg],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to get invokefunction')
@@ -324,7 +324,7 @@ class Crawler:
         sys.exit(1)
 
     async def get_global_balance(self, address):
-        async with self.session.post(self.neo_uri,
+        async with self.session.post(self.neo_uri, timeout=30,
                 json={'jsonrpc':'2.0','method':'getaccountstate','params':[address],'id':10}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to getaccountstate {}, http status: {}'.format(address, resp.status))
