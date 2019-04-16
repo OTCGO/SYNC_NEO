@@ -32,7 +32,9 @@ class Crawler:
         self.loop = loop
         self.processing = []
         self.cache = {}
-        self.session = aiohttp.ClientSession(loop=loop, headers={"Connection": "close"})
+        self.sem = asyncio.Semaphore(value=self.max_tasks)
+        #self.session = aiohttp.ClientSession(loop=loop, headers={"Connection": "close"})
+        self.session = aiohttp.ClientSession(loop=loop)
         self.super_node_uri = super_node_uri
         self.scheduler = AsyncIOScheduler(job_defaults = {
                         'coalesce': True,
@@ -211,7 +213,7 @@ class Crawler:
                 }
 
     async def get_block(self, height):
-        async with self.session.post(self.neo_uri, timeout=30,
+        async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'getblock','params':[height,1],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to fetch block {}, http status: {}'.format(height, resp.status))
@@ -220,7 +222,7 @@ class Crawler:
             return j['result']
 
     async def get_block_count(self):
-        async with self.session.post(self.neo_uri, timeout=30,
+        async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'getblockcount','params':[],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to fetch blockcount')
@@ -229,13 +231,14 @@ class Crawler:
             return j['result']
 
     async def get_transaction(self, txid):
-        async with self.session.post(self.neo_uri, timeout=30,
-                json={'jsonrpc':'2.0','method':'getrawtransaction','params':[txid,1],'id':1}) as resp:
-            if 200 != resp.status:
-                logger.error('Unable to fetch transaction {}'.format(txid))
-                sys.exit(1)
-            j = await resp.json()
-            return j['result']
+        async with self.sem:
+            async with self.session.post(self.neo_uri, timeout=60,
+                    json={'jsonrpc':'2.0','method':'getrawtransaction','params':[txid,1],'id':1}) as resp:
+                if 200 != resp.status:
+                    logger.error('Unable to fetch transaction {}'.format(txid))
+                    sys.exit(1)
+                j = await resp.json()
+                return j['result']
 
     async def get_mysql_pool(self):
         try:
@@ -290,7 +293,7 @@ class Crawler:
             await self.pool.release(conn)
 
     async def get_invokefunction(self, contract, func):
-        async with self.session.post(self.neo_uri, timeout=30,
+        async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to get invokefunction')
@@ -299,7 +302,7 @@ class Crawler:
             return j['result']
 
     async def get_invokefunction_with_extra_arg(self, contract, func, arg):
-        async with self.session.post(self.neo_uri, timeout=30,
+        async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func, arg],'id':1}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to get invokefunction')
@@ -324,7 +327,7 @@ class Crawler:
         sys.exit(1)
 
     async def get_global_balance(self, address):
-        async with self.session.post(self.neo_uri, timeout=30,
+        async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'getaccountstate','params':[address],'id':10}) as resp:
             if 200 != resp.status:
                 logger.error('Unable to getaccountstate {}, http status: {}'.format(address, resp.status))
