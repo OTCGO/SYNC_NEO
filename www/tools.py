@@ -218,36 +218,10 @@ class Tool:
         return '', False, 'No Ong'
 
     @staticmethod
-    async def compute_gas(height,old_claims,db):
-        if not old_claims: old_claims = [] 
-        claims = {}
-        for v in old_claims:
-            k = v['_id'][2:]
-            new_v = {}
-            new_v['startIndex'] = v['height']
-            new_v['value'] = v['value']
-            if 'spent_height' in v.keys():
-                new_v['stopIndex'] = v['spent_height']
-                new_v['stopHash'] = v['spent_txid']
-                new_v['status'] = True
-            else:
-                new_v['stopIndex'] = height
-                new_v['stopHash'] = ''
-                new_v['status'] = False
-            claims[k] = new_v
-        del old_claims
+    async def compute_gas(claims,fees):
         decrementInterval = 2000000
         generationAmount = [8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] 
         available = unavailable = D('0')
-        heights = list(set(
-            [v['startIndex']-1 for v in claims.values() if v['startIndex'] != 0] + 
-            [v['stopIndex']-1 for v in claims.values()]))
-        fresult = await asyncio.gather(*[db.blocks.find_one({'_id':h}) for h in heights])
-        fees = {-1:0,0:0}
-        for i in range(len(heights)):
-            h = heights[i]
-            if h not in fees.keys():
-                fees[h] = fresult[i]['total_sys_fee']
         for k,v in claims.items():
             amount = D('0')
             ustart = v['startIndex'] // decrementInterval
@@ -272,7 +246,7 @@ class Tool:
                 available += D(v['value']) / 100000000 * amount
             else:
                 unavailable += D(v['value']) / 100000000 * amount
-        base = {'available':sci_to_str(str(available)),'unavailable':sci_to_str(str(unavailable))}
+        base = {'result':True,'available':sci_to_str(str(available)),'unavailable':sci_to_str(str(unavailable))}
         base['claims'] = [i.split('_') for i in claims.keys() if claims[i]['stopHash']]
         return base
 

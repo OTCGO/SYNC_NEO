@@ -60,10 +60,7 @@ def valid_domain(domain, request):
     return True
 
 def get_asset_decimal(asset):
-    try:
-        return int(asset['decimals'])
-    except:
-        return 8
+    return asset['decimals']
 
 async def get_rpc(request,method,params):
     async with request.app['session'].post(request.app['neo_uri'],
@@ -187,6 +184,56 @@ async def mysql_get_balance(request, address):
         else: balance[o] = result[o]
     return balance
 
+async def mysql_get_all_unclaim_utxo(pool, address, height):
+    sql = "SELECT txid,index_n,height,spent_txid,spent_height,value,status FROM utxos WHERE address='%s' AND asset='%s' AND claim_height IS NULL;" % (address, NEO[2:])
+    result = {}
+    r = await mysql_query_one(pool, sql)
+    for i in r:
+        if 0 == i[6]:#available
+            result[i[0]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':i[3],'stopIndex':i[4],'value':i[5],'status':True}
+        else:#unavailable
+            result[i[0]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':'','stopIndex':height,'value':i[5],'status':False}
+    return result
+
+async def mysql_get_block_total_sys_fee(pool, heights):
+    s = ''
+    for i in range(len(heights)):
+        if 0 == i: s += str(heights[i])
+        else: s += ',' + str(heights[i])
+    sql = "SELECT total_sys_fee FROM block WHERE height IN (%s);" % s
+    result = {-1:0,0:0}
+    r = await mysql_query_one(pool, sql)
+    for i in range(len(heights)):
+        result[heights[i]] = r[i][0]
+    return result
+
+async def mysql_get_history(pool, address, asset, offset, length):
+    if asset:
+        sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
+    else:
+        sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, offset, length)
+    result = []
+    r = await mysql_query_one(pool, sql)
+    for i in r:
+        result.append({'txid':i[0],'time':i[1],'operation':i[2],'value':i[3],'asset':i[4]})
+    return result
+
+async def mysql_get_platform(pool, p):
+    sql = "SELECT version,download_url,force_update,sha1,sha256,release_time,update_notes_zh,update_notes_en FROM platform WHERE name='%s' ORDER BY release_time DESC limit 1;" % p
+    result = {'name':p}
+    r = await mysql_query_one(pool, sql)
+    if r:
+        result['version']           = r[0][0]
+        result['download_url']      = r[0][1]
+        result['force_update']      = r[0][2]
+        result['sha1']              = r[0][3]
+        result['sha256']            = r[0][4]
+        result['release_time']      = r[0][5]
+        result['update_notes_zh']   = r[0][6]
+        result['update_notes_en']   = r[0][7]
+    return result
+
+
 def get_all_global(request):
     return request.app['cache'].get('assets')['GLOBAL']
 
@@ -272,97 +319,88 @@ async def block(net, block, request):
 
 @get('/{net}/transaction/{txid}')
 async def transaction(net, txid, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return await get_rpc(request, 'getrawtransaction', [txid,1])
 
 @get('/{net}/address/{address}')
 async def address(net, address, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     result = {'_id':address,'balances': await mysql_get_balance(request, address)}
     aresult = await get_ont_balance(request, address)
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult['ong']
     return result
 
-'''
 @get('/{net}/claim/{address}')
 async def claim(net, address, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
-    raw_utxo = []
-    cursor = request.app['db'].utxos.find({'address':address,'asset':NEO, 'claim_height':None})
-    for document in await cursor.to_list(None):
-        raw_utxo.append(document)
-    r = await request.app['db'].state.find_one({'_id':'height'})
-    height = r['value'] + 1
-    return await Tool.compute_gas(height, raw_utxo, request.app['db'])
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
+    height = request.app['cache'].get('height') + 1
+    claims = await mysql_get_all_unclaim_utxo(request.app['pool'], address, height)
+    if claims:
+        heights = list(set(
+            [v['startIndex']-1 for v in claims.values() if v['startIndex'] != 0] + 
+            [v['stopIndex']-1 for v in claims.values()]))
+        heights.sort()
+        fees = await mysql_get_block_total_sys_fee(request.app['pool'], heights)
+        return await Tool.compute_gas(claims, fees)
+    return {'result':True, 'available':'0', 'unavailable':'0', 'claims':[]}
 
 @get('/{net}/claim/seas/{address}')
 async def claim_seas(net, address, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     assetId = CSEAS[net][2:]
     asset = get_an_asset(assetId, request)
     ad = get_asset_decimal(asset)
     balance = D(await get_nep5_asset_balance(request, address, assetId))
     if balance > 0:
-        r = await request.app['db'].state.find_one({'_id':'height'})
         bstorage = await get_rpc(request, 'getstorage', [CSEAS[net], Tool.address_to_scripthash(address)])
         bheight = bstorage[16:]
-        bheight = D(Tool.hex_to_num_str(bheight,0))
-        height = r['value']
+        bheight = D(Tool.hex_to_num_str(bheight,ad))
+        height = request.app['cache'].get('height')
         bonus = (height - bheight) * 6 * balance / 100000000
-        return {'available':str(bonus),'unavailable':'0'}
-    return {'available':'0', 'unavailable':'0'}
+        return {'result':True, 'available':str(bonus),'unavailable':'0'}
+    return {'result':True, 'available':'0', 'unavailable':'0'}
 
 @get('/{net}/history/{address}')
 async def history(net, address, request, *, asset=0, index=1, length=20):
-    if not valid_net(net, request): return {'error':'wrong net'}
-    if not Tool.validate_address(address): return {'error':'wrong address'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     result,info = valid_page_arg(index, length)
-    if not result: return info
+    if not result: return info.update({'result':False})
     index, length = info['index'], info['length']
     skip_num = (index - 1) * length
     raw_utxo = []
     query = {'address':address}
     if 0 != asset:
         if asset.startswith('0x'): asset = asset[2:]
-        if not valid_asset(asset): return {'error':'asset not exist'}
-        if 64 == len(asset):
-            query['asset'] = '0x' + asset
-        else:
-            query['asset'] = asset
-    if 'asset' in query.keys() and 40 == len(query['asset']):
-        cursor = request.app['db'].nep5history.find(query).sort('time', DESCENDING)
-    else:
-        cursor = request.app['db'].history.find(query).sort('time', DESCENDING)
-    for document in await cursor.skip(skip_num).to_list(length=length):
-        del document['_id']
-        del document['address']
-        raw_utxo.append(document)
-    return {'result':raw_utxo}
+        if not valid_asset(asset): return {'result':False, 'error':'asset not exist'}
+    else: asset = None
+    result = await mysql_get_history(request.app['pool'], address, asset, index, length)
+    return {'result':result}
 
 @get('/{net}/version/{platform}')
 async def version(net, platform, request):
-    if not valid_net(net, request): return {'error':'wrong net'}
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     platform = platform.lower()
-    if not valid_platform(platform): return {'error':'wrong platform'}
-    info = await request.app['db'].state.find_one({'_id':platform})
+    if not valid_platform(platform): return {'result':False, 'error':'wrong platform'}
+    info = await mysql_get_platform(request.app['pool'], platform)
     if info:
-        del info['_id']
         return {'result':True, 'version':info}
     return {'result':False, 'error':'not exist'}
 
 @get('/{net}/resolve/{domain}')
 async def resolve(net, domain, request):
-    if not valid_domain(domain, request): return {'error':'wrong domain'}
+    if not valid_domain(domain, request): return {'result':False, 'error':'wrong domain'}
     namehash = Tool.nns_namehash(domain)
     resolve_invoke = Tool.nns_resolve_invoke(namehash)
     address = await get_resolve_address(resolve_invoke, request)
-    if not address: return {'error':'not resolve'}
+    if not address: return {'result':False, 'error':'not resolve'}
     return {'result':True, 'address':address}
 
+'''
 @get('/{net}/swap/{address}/{asset}')
 async def swap(net, address, asset, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
