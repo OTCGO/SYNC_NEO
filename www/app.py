@@ -1,3 +1,8 @@
+#! /usr/bin/env python3
+# coding: utf-8
+# flow@SEA
+# Licensed under the MIT License.
+
 import logging; logging.basicConfig(level=logging.INFO)
 import asyncio
 import uvloop; asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -15,7 +20,7 @@ from coreweb import add_routes
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC, CSEAS, CSEAC
+from assets import GLOBAL_TYPES
 
 
 

@@ -1,18 +1,18 @@
-import os
+#! /usr/bin/env python3
+# coding: utf-8
+# flow@SEA
+# Licensed under the MIT License.
+
 import sys
-import json
 import asyncio
 from coreweb import get, post, options
-from aiohttp import web
 from decimal import Decimal as D
 from binascii import hexlify, unhexlify
 from apis import APIValueError, APIResourceNotFoundError, APIError
 from tools import Tool, check_decimal, sci_to_str, big_or_little
-from assets import NEO, GAS, GLOBAL_TYPES, SEAS, SEAC, CSEAS, CSEAC
+from assets import NEO, SEAS, SEAC, CSEAS, CSEAC
 import logging
 logging.basicConfig(level=logging.DEBUG)
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
 from ont_handlers import height_ont, block_ont, transaction_ont, get_ont_balance, address_ont, claim_ont, transfer_ont, ong, get_ong, broadcast_ont, transfer_ont_options, ong_options, broadcast_ont_options
 from ont_handlers import assets as ONT_ASSETS
 
@@ -76,7 +76,7 @@ async def get_rpc(request,method,params):
 
 async def send_raw_transaction(tx, request):
     async with request.app['session'].post(request.app['neo_uri'],
-            json={'jsonrpc':'2.0','method':'sendrawtransaction','params':[tx],'id':1}) as resp:
+            json={'jsonrpc':'2.0','method':'sendrawtransaction','params':[tx],'id':10}) as resp:
         method = 'sendrawtransaction'
         if 200 != resp.status:
             logging.error('Unable to visit %s %s' % (request.app['neo_uri'], method))
@@ -87,12 +87,6 @@ async def send_raw_transaction(tx, request):
             return False, j['error']['message']
         return j['result'],''
 
-async def get_nep5_asset_balance(request, address, asset):
-    sql = "SELECT value FROM balance WHERE address='%s',asset='%s';" % (address, asset)
-    r = await mysql_query_one(request.app['pool'], sql)
-    if r: return r[0][0]
-    return '0'
-
 async def get_resolve_address(resolve_invoke, request):
     result = await get_rpc(request, 'invokescript', [resolve_invoke])
     if result and "HALT, BREAK" == result["state"]:
@@ -100,49 +94,6 @@ async def get_resolve_address(resolve_invoke, request):
         if '00' != hex_str: return Tool.hex_to_string(hex_str)
         return ''
     return ''
-
-async def get_multi_nep5_balance(request, address, assets):
-    #pass
-    result = {}
-    for asset in assets:
-        try:
-            asset['decimals'] = int(asset['decimals'])
-        except:
-            asset['decimals'] = 8
-    nep5_result = await asyncio.gather(
-            *[get_nep5_asset_balance(request, address, asset["id"]) for asset in assets])
-    for i in range(len(assets)):
-        result[assets[i]['id']] = nep5_result[i]
-    return result
-
-async def get_utxo(request, address, asset):
-    #pass
-    if not asset.startswith('0x'): asset = '0x' + asset
-    result = []
-    cursor = request.app['db'].utxos.find({'address':address, 'asset':asset, 'spent_height':None})
-    for doc in await cursor.to_list(None):
-        doc['asset'] = doc['asset'][2:]
-        doc['txid']  = doc['txid'][2:]
-        result.append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
-    return result
-
-async def get_global_asset_balance(request, address, asset):
-    #pass
-    if not asset.startswith('0x'): asset = '0x' + asset
-    utxo = await get_utxo(request, address, asset)
-    return sci_to_str(str(sum([D(i['value']) for i in utxo])))
-
-async def get_all_utxo(request, address):
-    #pass
-    result = {}
-    cursor = request.app['db'].utxos.find({'address':address,'spent_height':None})
-    for doc in await cursor.to_list(None):
-        asset = doc['asset'] = doc['asset'][2:]
-        doc['txid']  = doc['txid'][2:]
-        if asset not in result.keys():
-            result[asset] = []
-        result[asset].append({'prevIndex':doc['index'],'prevHash':doc['txid'],'value':doc['value']})
-    return result
 
 async def get_mysql_cursor(pool):
     conn = await pool.acquire()
@@ -207,6 +158,12 @@ async def mysql_get_block_total_sys_fee(pool, heights):
         result[heights[i]] = r[i][0]
     return result
 
+async def mysql_get_nep5_asset_balance(pool, address, asset):
+    sql = "SELECT value FROM balance WHERE address='%s',asset='%s';" % (address, asset)
+    r = await mysql_query_one(pool, sql)
+    if r: return r[0][0]
+    return '0'
+
 async def mysql_get_history(pool, address, asset, offset, length):
     if asset:
         sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
@@ -233,15 +190,14 @@ async def mysql_get_platform(pool, p):
         result['update_notes_en']   = r[0][7]
     return result
 
-
-def get_all_global(request):
-    return request.app['cache'].get('assets')['GLOBAL']
-
-def get_all_nep5(request):
-    return request.app['cache'].get('assets')['NEP5']
-
-def get_all_ontology(request):
-    return request.app['cache'].get('assets')['OEP4']
+async def mysql_get_utxo(pool, address, asset):
+    if not asset.startswith('0x'): asset = '0x' + asset
+    sql = "SELECT value,index_n,txid FROM utxos WHERE address='%s' AND asset='%s' AND status=1;" % (address,asset)
+    result = []
+    r = await mysql_query_one(pool, sql)
+    for i in r:
+        result.append({'value':i[0],'prevIndex':i[1],'prevHash':i[2][2:]})
+    return result
 
 def get_all_asset(request):
     return request.app['cache'].get('assets')
@@ -253,6 +209,7 @@ def get_an_asset(i, request):
     if i in assets['NEP5'].keys(): return assets['NEP5'][i]
     if i in assets['OEP4'].keys(): return assets['OEP4'][i]
     return None
+
 
 @get('/')
 def index(request):
@@ -354,7 +311,7 @@ async def claim_seas(net, address, request):
     assetId = CSEAS[net][2:]
     asset = get_an_asset(assetId, request)
     ad = get_asset_decimal(asset)
-    balance = D(await get_nep5_asset_balance(request, address, assetId))
+    balance = D(await mysql_get_nep5_asset_balance(request.app['pool'], address, assetId))
     if balance > 0:
         bstorage = await get_rpc(request, 'getstorage', [CSEAS[net], Tool.address_to_scripthash(address)])
         bheight = bstorage[16:]
@@ -400,7 +357,6 @@ async def resolve(net, domain, request):
     if not address: return {'result':False, 'error':'not resolve'}
     return {'result':True, 'address':address}
 
-'''
 @get('/{net}/swap/{address}/{asset}')
 async def swap(net, address, asset, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
@@ -408,7 +364,7 @@ async def swap(net, address, asset, request):
     if not asset.startswith('0x'): asset = '0x' + asset
     if not valid_swap_asset(asset, net): return {'result':False, 'error':'wrong asset'}
     sh_asset, name = get_swap_asset_info(asset, net)
-    utxo = await get_utxo(request, address, asset)
+    utxo = await mysql_get_utxo(request.app['pool'], address, asset)
     if not utxo: return {'result':False, 'error':'insufficient balance'}
     balance = sum([D(i['value']) for i in utxo])
     items = [(Tool.scripthash_to_address(unhexlify(sh_asset)), balance)]
@@ -441,23 +397,22 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     if ld != la: return {'result':False, 'error':'length of dests != length of amounts'}
     if nep5_asset and 1 != ld:
         return {'result':False, 'error':"NEP5 token transfer only support One to One"}
-    if False in map(Tool.validate_address, dests): return {'error':'wrong dests'}
+    if False in map(Tool.validate_address, dests): return {'result':False, 'error':'wrong dests'}
     try:
         amounts = [D(a) for a in amounts]
     except:
         return {'result':False, 'error':'wrong amounts'}
-    if [a for a in amounts if a <= D(0)]: return {'error':'wrong amounts'}
-    if False in [check_decimal(a,ad) for a in amounts]:
-        return {'result':False, 'error':'wrong amounts'}
+    if [a for a in amounts if a <= D(0)]: return {'result':False, 'error':'wrong amounts'}
+    if False in [check_decimal(a,ad) for a in amounts]: return {'result':False, 'error':'wrong amounts'}
     #check balance && transaction
     tran_num = sum(amounts)
     if nep5_asset:
-        balance = D(await get_nep5_asset_balance(request, source, assetId))
+        balance = D(await mysql_get_nep5_asset_balance(request.app['pool'], source, assetId))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0], ad)
         result,msg = True,''
     if global_asset:
-        utxo = await get_utxo(request, source, assetId)
+        utxo = await mysql_get_utxo(request.app['pool'], source, assetId)
         balance = sum([D(i['value']) for i in utxo])
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         items = [(dests[i],amounts[i]) for i in range(len(dests))]
@@ -474,16 +429,19 @@ async def gas(net, request, *, publicKey, **kw):
     #get gas
     address = Tool.cpubkey_to_address(publicKey)
     raw_utxo = []
-    cursor = request.app['db'].utxos.find({'address':address,'asset':NEO, 'claim_height':None})
-    for document in await cursor.to_list(None):
-        raw_utxo.append(document)
-    r = await request.app['db'].state.find_one({'_id':'height'})
-    height = r['value'] + 1
-    details = await Tool.compute_gas(height, raw_utxo, request.app['db'])
-    tx,result,msg = Tool.claim_transaction(address, details)
+    height = request.app['cache'].get('height') + 1
+    claims = await mysql_get_all_unclaim_utxo(request.app['pool'], address, height)
+    if claims:
+        heights = list(set(
+            [v['startIndex']-1 for v in claims.values() if v['startIndex'] != 0] + 
+            [v['stopIndex']-1 for v in claims.values()]))
+        heights.sort()
+        fees = await mysql_get_block_total_sys_fee(request.app['pool'], heights)
+        details = await Tool.compute_gas(claims, fees)
+        tx,result,msg = Tool.claim_transaction(address, details)
     if result:
         return {'result':True, 'transaction':tx}
-    return {'result':False, 'error':msg}
+    return {'result':False, 'error':'No gas to claim'}
 
 @post('/{net}/new_contract')
 async def new_contract(net, contract, address, request, **kw):
@@ -620,4 +578,3 @@ async def gas_options(net, request):
 async def broadcast_options(net, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     return 'OK'
-'''
