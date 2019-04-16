@@ -1,7 +1,9 @@
-import os
-import json
+#! /usr/bin/env python3
+# coding: utf-8
+# flow@SEA
+# Licensed under the MIT License.
+
 import math
-import asyncio
 import datetime
 from decimal import Decimal as D
 from coreweb import get, post, options

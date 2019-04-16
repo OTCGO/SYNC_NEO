@@ -91,3 +91,5 @@ ENV/
 # Pipenv
 Pipfile.lock
 dump.rdb
+
+.idea
