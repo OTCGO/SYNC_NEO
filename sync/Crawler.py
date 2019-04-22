@@ -71,6 +71,14 @@ class Crawler:
         return hashlib.sha256(hashlib.sha256(b).digest()).digest()
 
     @classmethod
+    def validate_address(self, address):
+        if len(address) not in [33,34]: return False
+        if 'A' != address[0]: return False
+        tmp = b58decode(address)
+        x,check = tmp[:-4],tmp[-4:]
+        return self.hash256(x)[:4] == check
+
+    @classmethod
     def scripthash_to_address(cls, sh):
         tmp = unhexlify('17' + sh)
         result = b58encode(tmp + cls.hash256(tmp)[:4])
