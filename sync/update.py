@@ -98,8 +98,9 @@ if __name__ == "__main__":
     neo_uri         = C.get_neo_uri()
     loop            = asyncio.get_event_loop()
     super_node_uri  = C.get_super_node()
+    tasks           = C.get_tasks()
 
-    u = UPT('upt', mysql_args, neo_uri, loop, super_node_uri)
+    u = UPT('upt', mysql_args, neo_uri, loop, super_node_uri, tasks)
 
     try:
         loop.run_until_complete(u.crawl())

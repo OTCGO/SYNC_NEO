@@ -33,6 +33,7 @@ class Config:
     def get_neo_uri():
         neo_node = os.environ.get('NEONODE')
         neo_port = os.environ.get('NEOPORT')
+        if '443' == neo_port: return 'https://%s:%s' % (neo_node, neo_port)
         return 'http://%s:%s' % (neo_node, neo_port)
 
     @staticmethod
