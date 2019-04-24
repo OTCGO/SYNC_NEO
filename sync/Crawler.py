@@ -313,7 +313,7 @@ class Crawler:
         async with self.session.post(self.neo_uri, timeout=60,
                 json={'jsonrpc':'2.0','method':'invokefunction','params':[contract, func, arg],'id':1}) as resp:
             if 200 != resp.status:
-                logger.error('Unable to get invokefunction')
+                logger.error('invokefunction_extra_arg contract:{},func:{},arg:{}'.format(contract,func,arg))
                 sys.exit(1)
             j = await resp.json()
             return j['result']
@@ -331,7 +331,7 @@ class Crawler:
         d = await self.get_invokefunction_with_extra_arg(contract, 'balanceOf', [{'type':'Hash160','value':CT.big_or_little(self.address_to_scripthash(address))}])
         if 'state' in d.keys() and d['state'].startswith('HALT'):
             return d['stack'][0] #eg:{"type":"ByteArray","value":""} or {"type":"ByteArray","value":"159a390f"}
-        logger.error('Can not get the balanceOf {}-{}'.format(contract,address))
+        logger.error('get_nep5_balance contract:{},address:{}'.format(contract,address))
         sys.exit(1)
 
     async def get_global_balance(self, address):
@@ -425,6 +425,10 @@ class Crawler:
                     logger.error(msg)
                     self.max_tasks -= 10
                     if self.max_tasks > 0:
+                        del self.processing
+                        del self.cache
+                        self.processing = []
+                        self.cache = {}
                         continue
                     else:
                         sys.exit(1)

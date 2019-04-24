@@ -243,7 +243,8 @@ async def init(loop):
                     'user':     get_mysql_user(),
                     'password': get_mysql_pass(),
                     'db':       get_mysql_db(),
-                    'autocommit':True
+                    'autocommit':True,
+                    'maxsize':512
                 }
     neo_uri = get_neo_uri()
     ont_uri = get_ont_uri()

@@ -199,8 +199,32 @@ async def mysql_get_utxo(pool, address, asset):
         result.append({'value':i[0],'prevIndex':i[1],'prevHash':i[2][2:]})
     return result
 
+async def mysql_insert_one(pool, sql):
+    conn, cur = await get_mysql_cursor(pool)
+    logging.info('SQL:%s' % sql)
+    try:
+        await cur.execute(sql)
+        num = cur.rowcount
+        return num
+    except Exception as e:
+        logger.error("mysql INSERT failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        await pool.release(conn)
+
+async def mysql_update_nep5(request, address):
+    pool = request.app['pool']
+    upt_height = request.app['cache'].get('height') - 1
+    nep5 = get_all_nep5(request)
+    sql = "INSERT IGNORE INTO upt(address,asset,update_height) VALUES ('%s','%s',%s)"
+    data = [(address,n,upt_height) for n in nep5.keys()]
+    await asyncio.gather(*[mysql_insert_one(pool, sql % d) for d in data])
+
 def get_all_asset(request):
     return request.app['cache'].get('assets')
+
+def get_all_nep5(request):
+    return request.app['cache'].get('assets')['NEP5']
 
 def get_an_asset(i, request):
     if i.startswith('0x'): i = i[2:]
@@ -283,8 +307,13 @@ async def transaction(net, txid, request):
 async def address(net, address, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
-    result = {'_id':address,'balances': await mysql_get_balance(request, address)}
-    aresult = await get_ont_balance(request, address)
+    xresult = await asyncio.gather(
+                mysql_get_balance(request, address),
+                get_ont_balance(request, address),
+                mysql_update_nep5(request, address)
+            )
+    result = {'_id':address,'balances': xresult[0]}
+    aresult = xresult[1]
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult['ong']
     return result
