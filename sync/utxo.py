@@ -77,10 +77,10 @@ class UTXO(Crawler):
                 if 'claims' in tx.keys():
                     for claim in tx['claims']:
                         claims.append([claim, txid, height])
-        if vins:
-            await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
         if vouts:
             await asyncio.wait([self.update_a_vout(*vout) for vout in vouts])
+        if vins:
+            await asyncio.wait([self.update_a_vin(*vin) for vin in vins])
         if claims:
             await asyncio.wait([self.update_a_claim(*claim) for claim in claims])
 

@@ -118,8 +118,7 @@ async def get_height(pool, name):
         await pool.release(conn)
 
 async def get_sync_height(pool):
-    result = await asyncio.gather(get_height(pool, 'history'), get_height(pool, 'utxo'))
-    return min(result)
+    return await get_height(pool, 'utxo')
 
 async def update_height(pool, cache):
     r = await get_sync_height(pool)

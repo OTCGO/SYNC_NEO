@@ -56,7 +56,7 @@ class Crawler:
         heightA = await self.get_block_count()
         info = await self.get_super_node_info()
         heightB = info['height']
-        if heightA <= heightB:
+        if heightA < heightB:
             self.neo_uri = info['fast'][randint(0,len(info['fast'])-1)]
         logger.info('heightA:%s heightB:%s neo_uri:%s' % (heightA,heightB,self.neo_uri))
 
