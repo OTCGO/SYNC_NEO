@@ -178,15 +178,15 @@ async def mysql_get_history(pool, address, asset, offset, length):
 
 async def mysql_get_platform(pool, p):
     sql = "SELECT version,download_url,force_update,sha1,sha256,release_time,update_notes_zh,update_notes_en FROM platform WHERE name='%s' ORDER BY release_time DESC limit 1;" % p
-    result = {'name':p}
+    result = {'platform':p}
     r = await mysql_query_one(pool, sql)
     if r:
         result['version']           = r[0][0]
         result['download_url']      = r[0][1]
-        result['force_update']      = r[0][2]
+        result['force_update']      = False if r[0][2] == 0 else True
         result['sha1']              = r[0][3]
         result['sha256']            = r[0][4]
-        result['release_time']      = r[0][5]
+        result['release_time']      = str(r[0][5])
         result['update_notes_zh']   = r[0][6]
         result['update_notes_en']   = r[0][7]
     return result
