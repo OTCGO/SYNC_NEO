@@ -145,7 +145,12 @@ async def get_asset_state(pool):
         await pool.release(conn)
 
 async def update_assets(pool, cache):
-    assets = {'state':await get_asset_state(pool), 'GLOBAL':{}, 'NEP5':{}, 'OEP4':{}}
+    state = await get_asset_state(pool)
+    old_assets = {'state':state, 'GLOBAL':[], 'NEP5':[], 'ONTOLOGY':[
+        {"name":"Ontology Token","symbol":"ontology-ONT","decimals":"0","type":"ONTOLOGY","id":'0000000000000000000000000000000000000001'},
+        {"name":"Ontology Gas",  "symbol":"ontology-ONG","decimals":"9","type":"ONTOLOGY","id":'0000000000000000000000000000000000000002'}
+        ]}
+    assets = {'state':state, 'GLOBAL':{}, 'NEP5':{}, 'OEP4':{}}
     conn, cur = await get_mysql_cursor(pool)
     try:
         await cur.execute("select asset,type,name,symbol,decimals from assets;")
@@ -153,8 +158,10 @@ async def update_assets(pool, cache):
         if result:
             for r in result:
                 if r[1] in GLOBAL_TYPES:
+                    old_assets['GLOBAL'].append({'type':r[1],'name':[{"lang":"zh-CN","name":r[2]},{"lang":"en","name":r[2]}],'precision':r[4],'id':r[0]})
                     assets['GLOBAL'][r[0]]  = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
                 elif 'NEP5' == r[1]:
+                    old_assets['NEP5'].append({'name':r[2],'symbol':r[3],'decimals':str(r[4]),'type':r[1],'id':r[0]})
                     assets['NEP5'][r[0]]    = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
                 elif 'OEP4' == r[1]:
                     assets['GLOBAL'][r[0]]  = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
@@ -162,6 +169,7 @@ async def update_assets(pool, cache):
         logging.error("mysql SELECT failure:{}".format(e.args[0]))
         sys.exit(1)
     finally:
+        cache.set('old_assets', old_assets)
         cache.set('assets', assets)
         await pool.release(conn)
 
@@ -243,7 +251,7 @@ async def init(loop):
                     'password': get_mysql_pass(),
                     'db':       get_mysql_db(),
                     'autocommit':True,
-                    'maxsize':512
+                    'maxsize':256
                 }
     neo_uri = get_neo_uri()
     ont_uri = get_ont_uri()

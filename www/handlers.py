@@ -141,9 +141,9 @@ async def mysql_get_all_unclaim_utxo(pool, address, height):
     r = await mysql_query_one(pool, sql)
     for i in r:
         if 0 == i[6]:#available
-            result[i[0]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':i[3],'stopIndex':i[4],'value':i[5],'status':True}
+            result[i[0][2:]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':i[3],'stopIndex':i[4],'value':i[5],'status':True}
         else:#unavailable
-            result[i[0]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':'','stopIndex':height,'value':i[5],'status':False}
+            result[i[0][2:]+'_'+str(i[1])] = {'startIndex':i[2],'stopHash':'','stopIndex':height,'value':i[5],'status':False}
     return result
 
 async def mysql_get_block_total_sys_fee(pool, heights):
@@ -159,7 +159,7 @@ async def mysql_get_block_total_sys_fee(pool, heights):
     return result
 
 async def mysql_get_nep5_asset_balance(pool, address, asset):
-    sql = "SELECT value FROM balance WHERE address='%s',asset='%s';" % (address, asset)
+    sql = "SELECT value FROM balance WHERE address='%s' AND asset='%s';" % (address, asset)
     r = await mysql_query_one(pool, sql)
     if r: return r[0][0]
     return '0'
@@ -172,7 +172,8 @@ async def mysql_get_history(pool, address, asset, offset, length):
     result = []
     r = await mysql_query_one(pool, sql)
     for i in r:
-        result.append({'txid':i[0],'time':i[1],'operation':i[2],'value':i[3],'asset':i[4]})
+        if 64==len(i[4]): result.append({'txid':i[0],'time':i[1],'asset':'0x'+i[4],'value':i[3],'operation':i[2]})
+        else: result.append({'txid':i[0],'time':i[1],'asset':i[4],'value':i[3],'operation':i[2]})
     return result
 
 async def mysql_get_platform(pool, p):
@@ -191,7 +192,7 @@ async def mysql_get_platform(pool, p):
     return result
 
 async def mysql_get_utxo(pool, address, asset):
-    if not asset.startswith('0x'): asset = '0x' + asset
+    if asset.startswith('0x'): asset = asset[2:]
     sql = "SELECT value,index_n,txid FROM utxos WHERE address='%s' AND asset='%s' AND status=1;" % (address,asset)
     result = []
     r = await mysql_query_one(pool, sql)
@@ -222,6 +223,9 @@ async def mysql_update_nep5(request, address):
 
 def get_all_asset(request):
     return request.app['cache'].get('assets')
+
+def get_old_all_asset(request):
+    return request.app['cache'].get('old_assets')
 
 def get_all_nep5(request):
     return request.app['cache'].get('assets')['NEP5']
@@ -279,7 +283,7 @@ async def height(net, request):
 @get('/{net}/asset')
 async def asset(net, request, *, asset=0):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
-    if 0 == asset: return {'result':True, 'assets':get_all_asset(request)}
+    if 0 == asset: return get_old_all_asset(request)
     if asset.startswith('0x'): asset = asset[2:]
     if not valid_asset(asset): return {'result':False, 'error':'asset not exist'}
     r = get_an_asset(asset, request)
@@ -322,7 +326,7 @@ async def address(net, address, request):
 async def claim(net, address, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
-    height = request.app['cache'].get('height') + 1
+    height = request.app['cache'].get('height')
     claims = await mysql_get_all_unclaim_utxo(request.app['pool'], address, height)
     if claims:
         heights = list(set(
@@ -345,7 +349,7 @@ async def claim_seas(net, address, request):
         bstorage = await get_rpc(request, 'getstorage', [CSEAS[net], Tool.address_to_scripthash(address)])
         bheight = bstorage[16:]
         bheight = D(Tool.hex_to_num_str(bheight,ad))
-        height = request.app['cache'].get('height')
+        height = request.app['cache'].get('height') - 1
         bonus = (height - bheight) * 6 * balance / 100000000
         return {'result':True, 'available':str(bonus),'unavailable':'0'}
     return {'result':True, 'available':'0', 'unavailable':'0'}
@@ -458,7 +462,7 @@ async def gas(net, request, *, publicKey, **kw):
     #get gas
     address = Tool.cpubkey_to_address(publicKey)
     raw_utxo = []
-    height = request.app['cache'].get('height') + 1
+    height = request.app['cache'].get('height')
     claims = await mysql_get_all_unclaim_utxo(request.app['pool'], address, height)
     if claims:
         heights = list(set(
