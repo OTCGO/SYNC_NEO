@@ -47,7 +47,7 @@ def valid_page_arg(index, length):
         length = int(length)
     except:
         return False, {'error':'wrong length'}
-    if index <= 0: return False, {'error':'wrong index'}
+    if index < 0: return False, {'error':'wrong index'}
     if length <= 0 or length>100: return False, {'error':'wrong length'}
     return True, {'index':index, 'length':length}
 
@@ -355,13 +355,12 @@ async def claim_seas(net, address, request):
     return {'result':True, 'available':'0', 'unavailable':'0'}
 
 @get('/{net}/history/{address}')
-async def history(net, address, request, *, asset=0, index=1, length=20):
+async def history(net, address, request, *, asset=0, index=0, length=20):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     result,info = valid_page_arg(index, length)
     if not result: return info.update({'result':False})
     index, length = info['index'], info['length']
-    skip_num = (index - 1) * length
     raw_utxo = []
     query = {'address':address}
     if 0 != asset:
