@@ -94,3 +94,19 @@ CREATE TABLE IF NOT EXISTS platform (
   PRIMARY KEY (id),
   UNIQUE INDEX uidx_name_version (name, version)
 );
+
+CREATE TABLE IF NOT EXISTS oep4_history (
+  id INT UNSIGNED AUTO_INCREMENT,
+  txid CHAR(64) NOT NULL,
+  operation VARCHAR(3) NOT NULL,
+  index_n SMALLINT UNSIGNED NOT NULL,
+  address VARCHAR(34) NOT NULL,	#if null '0'*34
+  value VARCHAR(40) NOT NULL,
+  dest VARCHAR(34) NOT NULL,	#if null '0'*34
+  timepoint INT UNSIGNED NOT NULL,
+  asset VARCHAR(64) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE INDEX uidx_txid_op_index (txid, operation, index_n),
+  INDEX idx_address_asset_timepoint (address, asset, timepoint),
+  INDEX idx_address_dest_asset_op_timepoint (address, dest, asset, operation, timepoint)
+);

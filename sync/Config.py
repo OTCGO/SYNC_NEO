@@ -37,6 +37,12 @@ class Config:
         return 'http://%s:%s' % (neo_node, neo_port)
 
     @staticmethod
+    def get_ont_uri():
+        ont_node = os.environ.get('ONTNODE')
+        ont_port = os.environ.get('ONTPORT')
+        return 'http://%s:%s' % (ont_node, ont_port)
+
+    @staticmethod
     def get_tasks():
         return os.environ.get('TASKS')
 
