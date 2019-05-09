@@ -166,7 +166,10 @@ async def mysql_get_nep5_asset_balance(pool, address, asset):
 
 async def mysql_get_history(pool, address, asset, offset, length):
     if asset:
-        sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
+        if asset in ['0000000000000000000000000000000000000001','0000000000000000000000000000000000000002']:
+            sql = "SELECT txid,timepoint,operation,value,asset FROM oep4_history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
+        else:
+            sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
     else:
         sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, offset, length)
     result = []
