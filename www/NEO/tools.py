@@ -246,7 +246,7 @@ class Tool:
                 available += D(v['value']) / 100000000 * amount
             else:
                 unavailable += D(v['value']) / 100000000 * amount
-        base = {'result':True,'available':sci_to_str(str(available)),'unavailable':sci_to_str(str(unavailable))}
+        base = {'available':sci_to_str(str(available)),'unavailable':sci_to_str(str(unavailable))}
         base['claims'] = [i.split('_') for i in claims.keys() if claims[i]['stopHash']]
         return base
 

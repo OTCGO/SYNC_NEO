@@ -60,7 +60,8 @@ CREATE TABLE IF NOT EXISTS balance (
   value VARCHAR(40) NOT NULL,
   last_updated_height INT UNSIGNED DEFAULT NULL,
   PRIMARY KEY (id),
-  UNIQUE INDEX uidx_address_asset (address, asset)
+  UNIQUE INDEX uidx_address_asset (address, asset),
+  INDEX idx_asset_value_address (asset, value, address)
 );
 
 CREATE TABLE IF NOT EXISTS upt (

@@ -17,3 +17,15 @@ CSEAC = {
         'mainnet':'0xf735eb717f2f31dfc8d12d9df379da9b198b2045',
         'testnet':'0xd7da38240fa5ccf5fa4527cb6f260793d3a4483a'
         }
+
+
+ONT_ASSETS = {
+        'ont':{
+            'scripthash':'0000000000000000000000000000000000000001',
+            'decimal':1
+            },
+        'ong':{
+            'scripthash':'0000000000000000000000000000000000000002',
+            'decimal':9
+            },
+        }

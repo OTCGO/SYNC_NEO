@@ -20,9 +20,9 @@ from coreweb import add_routes
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from assets import GLOBAL_TYPES
 
 
+GLOBAL_TYPES = ["GoverningToken","UtilityToken","Share","Token"]
 
 def get_mysql_host():
     return os.environ.get('MYSQLHOST')
@@ -272,7 +272,7 @@ async def init(loop):
                     'max_instances': 1,
         })
     scheduler.add_job(update_height, 'interval', seconds=2, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
-    scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
+    #scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
     scheduler.add_job(update_assets, 'interval', seconds=120, args=[app['pool'], app['cache']], id='update_assets', timezone=utc)
     scheduler._logger = logging
     scheduler.start()
