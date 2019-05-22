@@ -312,8 +312,8 @@ async def address_v2(net, address, request):
             d['id'] = i
             d['balance'] = xresult[0][i]
             data.append(d)
-    data.append({'chain':"ONT",'type':"OEP4","name":"ONT","symbol":"ONT","decimals":0,'id':ONT_ASSETS['ont']['scripthash'],'balance':xresult[1]['ont']})
-    data.append({'chain':"ONT",'type':"OEP4","name":"ONG","symbol":"ONG","decimals":9,'id':ONT_ASSETS['ong']['scripthash'],'balance':xresult[1]['ong']})
+    data.append({'chain':"ONT",'type':"OEP4","name":"ONT","symbol":"Ontology-ONT","decimals":0,'id':ONT_ASSETS['ont']['scripthash'],'balance':xresult[1]['ont']})
+    data.append({'chain':"ONT",'type':"OEP4","name":"ONG","symbol":"Ontology-ONG","decimals":9,'id':ONT_ASSETS['ong']['scripthash'],'balance':xresult[1]['ong']})
     request['result']['data'] = data
 
 @format_result(['net','address'])
