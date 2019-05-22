@@ -375,7 +375,7 @@ async def claim_seas(net, address, request):
         bheight = D(Tool.hex_to_num_str(bheight,ad))
         height = request.app['cache'].get('height') - 1
         bonus = (height - bheight) * 6 * balance / 100000000
-        return {'result':True, 'available':str(bonus),'unavailable':'0'}
+        return {'result':True, 'available':sci_to_str(str(bonus)),'unavailable':'0'}
     return {'result':True, 'available':'0', 'unavailable':'0'}
 
 @get('/{net}/history/{address}')

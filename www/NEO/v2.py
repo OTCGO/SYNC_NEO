@@ -345,7 +345,7 @@ async def claim_seas_v2(net, address, request):
         bheight = D(Tool.hex_to_num_str(bheight,ad))
         height = request.app['cache'].get('height') - 1
         bonus = (height - bheight) * 6 * balance / 100000000
-        request['result']['data'] = {'available':str(bonus),'unavailable':'0'}
+        request['result']['data'] = {'available':sci_to_str(str(bonus)),'unavailable':'0'}
     else:
         request['result']['data'] = {'available':'0', 'unavailable':'0'}
 
