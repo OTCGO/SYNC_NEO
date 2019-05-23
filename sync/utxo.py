@@ -13,8 +13,9 @@ from Config import Config as C
 
 
 class UTXO(Crawler):
-    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='1000'):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, chain, tasks='1000'):
         super(UTXO,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        self.chain = chain
 
     async def update_a_vin(self, vin, txid, height):
         sql="""UPDATE utxos SET spent_txid='%s',spent_height=%s,status=0 WHERE txid='%s' AND index_n=%s;""" % (txid,height,vin['txid'],vin['vout'])
@@ -88,7 +89,7 @@ class UTXO(Crawler):
         vinas = await asyncio.gather(*[self.get_address_info_from_vin(vin[0]) for vin in vins])
         voutas = [(vout[0]['address'],vout[0]['asset'][2:]) for vout in vouts]
         uas = list(set(vinas + voutas))
-        if uas: await self.update_addresses(self.max_height, uas)
+        if uas: await self.update_addresses(self.max_height, uas, self.chain)
 
         await asyncio.wait([self.update_block(block) for block in self.cache.values()])
 
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     super_node_uri  = C.get_super_node()
     tasks           = C.get_tasks()
 
-    u = UTXO('utxo', mysql_args, neo_uri, loop, super_node_uri, tasks)
+    u = UTXO('utxo', mysql_args, neo_uri, loop, super_node_uri, 'NEO', tasks)
 
     try:
         loop.run_until_complete(u.crawl())
