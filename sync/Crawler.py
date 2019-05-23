@@ -390,9 +390,9 @@ class Crawler:
         finally:
             await self.pool.release(conn)
 
-    async def update_addresses(self, height, uas):
-        sql = "INSERT INTO upt(address,asset,update_height) VALUES ('%s','%s',%s) ON DUPLICATE KEY UPDATE update_height=%s"
-        data = [(ua[0],ua[1],height,height) for ua in uas]
+    async def update_addresses(self, height, uas, chain):
+        sql = "INSERT INTO upt(address,asset,update_height,chain) VALUES ('%s','%s',%s,'%s') ON DUPLICATE KEY UPDATE update_height=%s"
+        data = [(ua[0],ua[1],height,chain,height) for ua in uas]
         await asyncio.gather(*[self.mysql_insert_one(sql % d) for d in data])
 
     async def update_address_balances(self, data):

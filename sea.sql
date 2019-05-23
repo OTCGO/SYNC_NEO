@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS upt (
   address VARCHAR(34) NOT NULL,
   asset VARCHAR(64) NOT NULL,
   update_height INT UNSIGNED NOT NULL,
+  chain VARCHAR(20) DEFAULT 'NEO' NOT NULL,
   PRIMARY KEY (id),
   UNIQUE INDEX uidx_address_asset (address, asset)
 );

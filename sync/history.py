@@ -15,9 +15,10 @@ from CommonTool import CommonTool as CT
 
 
 class History(Crawler):
-    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, net, tasks='1000'):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, net, chain, tasks='1000'):
         super(History,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
         self.net = net
+        self.chain = chain
         self.cache_utxo = {}
         self.cache_log = {}
         self.cache_decimals = {}
@@ -165,7 +166,7 @@ class History(Crawler):
             uas.extend([(vout[3],vout[0]) for vout in svouts])
         uas = list(set(uas))
         if uas:
-            await self.update_addresses(self.max_height, uas)
+            await self.update_addresses(self.max_height, uas, self.chain)
 
         del self.cache_utxo
         self.cache_utxo = {}
@@ -188,7 +189,7 @@ if __name__ == "__main__":
     net             = C.get_net()
     tasks           = C.get_tasks()
 
-    h = History('history', mysql_args, neo_uri, loop, super_node_uri, net, tasks)
+    h = History('history', mysql_args, neo_uri, loop, super_node_uri, net, 'NEO', tasks)
 
     try:
         loop.run_until_complete(h.crawl())

@@ -14,14 +14,15 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 class UPT(Crawler):
-    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, tasks='100'):
+    def __init__(self, name, mysql_args, neo_uri, loop, super_node_uri, chain, tasks='100'):
         super(UPT,self).__init__(name, mysql_args, neo_uri, loop, super_node_uri, tasks)
+        self.chain = chain
         self.cache_decimals = {}
         self.cache_balances = {}
 
 
     async def get_address_info_to_update(self, height):
-        sql = "SELECT address,asset FROM upt where update_height < %s limit %s;" % (height, self.max_tasks)
+        sql = "SELECT address,asset FROM upt where chain='%s' AND update_height < %s limit %s;" % (self.chain, height, self.max_tasks)
         return await self.mysql_query_one(sql)
 
     async def get_cache_decimals(self, contract):
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     super_node_uri  = C.get_super_node()
     tasks           = C.get_tasks()
 
-    u = UPT('upt', mysql_args, neo_uri, loop, super_node_uri, tasks)
+    u = UPT('upt', mysql_args, neo_uri, loop, super_node_uri, "NEO", tasks)
 
     try:
         loop.run_until_complete(u.crawl())
