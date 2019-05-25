@@ -17,13 +17,14 @@ from CommonTool import CommonTool as CT
 
 
 class OEP4History(Crawler):
-    def __init__(self, name, mysql_args, ont_uri, loop, tasks='1000'):
+    def __init__(self, name, mysql_args, ont_uri, loop, chain, tasks='1000'):
         self.name = name
         self.start_time = CT.now()
         self.mysql_args = mysql_args
         self.max_tasks = int(tasks)
         self.neo_uri = ont_uri 
         self.loop = loop
+        self.chain = chain
         self.processing = []
         self.cache = {}
         self.sem = asyncio.Semaphore(value=self.max_tasks)
@@ -88,6 +89,8 @@ class OEP4History(Crawler):
                             his.append([txid, 'in',  index_n, dest,    value, address, timepoint, asset])
                 
         if his: await asyncio.wait([self.update_a_oep4history(*h) for h in his])
+        uas = list(set([(h[3],h[7]) for h in his]))
+        if uas: await self.update_addresses(self.max_height, uas, self.chain)
 
         del self.cache_event
         self.cache_event = {}
@@ -106,7 +109,7 @@ if __name__ == "__main__":
     loop            = asyncio.get_event_loop()
     tasks           = C.get_tasks()
 
-    h = OEP4History('oep4_history', mysql_args, ont_uri, loop, tasks)
+    h = OEP4History('oep4_history', mysql_args, ont_uri, loop, 'ONT', tasks)
 
     try:
         loop.run_until_complete(h.crawl())
