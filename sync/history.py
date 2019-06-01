@@ -132,7 +132,7 @@ class History(Crawler):
                 txid = tx['txid']
                 if 'InvocationTransaction' == tx['type']:
                     log = self.cache_log[txid]
-                    if ('vmstate' in log.keys() and 'HALT, BREAK' == log['vmstate']) or ('executions' in log.keys() and 'vmstate' in log['executions'][0].keys() and 'HALT, BREAK' == log['executions'][0]['vmstate']):
+                    if ('vmstate' in log.keys() and log['vmstate'].startswith('HALT')) or ('executions' in log.keys() and 'vmstate' in log['executions'][0].keys() and log['executions'][0]['vmstate'].startswith('HALT')):
                         if 'executions' in log.keys(): log['notifications'] = log['executions'][0]['notifications']
                         for i in range(len(log['notifications'])):
                             n = log['notifications'][i]
