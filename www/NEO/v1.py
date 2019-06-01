@@ -87,7 +87,7 @@ async def send_raw_transaction(tx, request):
 
 async def get_resolve_address(resolve_invoke, request):
     result = await get_rpc(request, 'invokescript', [resolve_invoke])
-    if result and "HALT, BREAK" == result["state"]:
+    if result and result["state"] in ["HALT, BREAK", "HALT"]:
         hex_str = result['stack'][0]['value']
         if '00' != hex_str: return Tool.hex_to_string(hex_str)
         return ''
