@@ -292,23 +292,37 @@ class Tool:
         return s
 
     @classmethod
-    def transfer_global(cls, address, utxos, items, assetId):
+    def transfer_global_with_fee(cls, address, utxos, items, assetId, fee=D('0'), fee_utxos=[], fee_assetId=''):
         '''
         return:transaction,result,errmsg
         '''
         inputs = []
+        freeze = []
         outputs = []
         value = sum([i[1] for i in items])
+        if fee < 0: return '',[],'wrong fee'
         if not isinstance(value, D): value = D(str(value))
-        rightUtxo = cls.get_right_utxo(utxos, value, assetId)
-        assert rightUtxo
-        for r in rightUtxo:
-            inputs.append((r['prevHash'], r['prevIndex']))#prevHash,prevIndex
-        for i in items:
-            outputs.append((assetId, i[1], i[0]))#asset,value:Decimal,address
-        returnValue = sum([i['value'] for i in rightUtxo]) - value
-        if returnValue:
-            outputs.append((assetId, returnValue, address))
+        if fee == 0 and value == 0: return '',[],'wrong arguments' 
+        if fee > 0:
+            if assetId == fee_assetId: value += fee
+            else:
+                feeRightUtxo = cls.get_right_utxo(fee_utxos, fee, fee_assetId)
+                if not feeRightUtxo: return '',[],'insufficient fee'
+                freeze.extend(feeRightUtxo)
+                for r in feeRightUtxo:
+                    inputs.append((r['prevHash'], r['prevIndex']))
+                feeReturnValue = sum([i['value'] for i in feeRightUtxo]) - fee
+                if feeReturnValue: outputs.append((fee_assetId, feeReturnValue, address))
+        if value > 0:
+            rightUtxo = cls.get_right_utxo(utxos, value, assetId)
+            if not rightUtxo: return '',[],'insufficient balance'
+            if fee > 0: freeze.extend(rightUtxo)
+            for r in rightUtxo:
+                inputs.append((r['prevHash'], r['prevIndex']))#prevHash,prevIndex
+            for i in items:
+                outputs.append((assetId, i[1], i[0]))#asset,value:Decimal,address
+            returnValue = sum([i['value'] for i in rightUtxo]) - value
+            if returnValue: outputs.append((assetId, returnValue, address))
         #构建交易
         if 65536 <= len(inputs) : return '',False,'too many inputs'
         if 65536 <= len(outputs): return '',False,'too many outputs'
@@ -320,7 +334,8 @@ class Tool:
         tx += cls.num_to_hex_str(len(outputs))
         for i in range(len(outputs)):
             tx += big_or_little(outputs[i][0]) + cls.decimal_to_hex(outputs[i][1]) + cls.address_to_scripthash(outputs[i][2])
-        return tx,True,''
+        if fee>0: return tx,freeze,''
+        return tx,rightUtxo,''
 
     @staticmethod
     def num_to_hex_str(num, length=1):

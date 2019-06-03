@@ -423,7 +423,7 @@ async def swap(net, address, asset, request):
     if not utxo: return {'result':False, 'error':'insufficient balance'}
     balance = sum([D(i['value']) for i in utxo])
     items = [(Tool.scripthash_to_address(unhexlify(sh_asset)), balance)]
-    transaction,result,msg = Tool.transfer_global(address, utxo, items, asset[2:])
+    transaction,result,msg = Tool.transfer_global_with_fee(address, utxo, items, asset[2:])
     if result:
         itx = 'd10121000a6d696e74546f6b656e7367' + sh_asset + '0000000000000000'
         if 'SEAC' == name:
@@ -471,7 +471,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
         balance = sum([D(i['value']) for i in utxo])
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         items = [(dests[i],amounts[i]) for i in range(len(dests))]
-        transaction,result,msg = Tool.transfer_global(source, utxo, items, assetId)
+        transaction,result,msg = Tool.transfer_global_with_fee(source, utxo, items, assetId)
     if result:
         return {'result':True, 'transaction':transaction}
     return {'result':False, 'error':msg}

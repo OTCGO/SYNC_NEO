@@ -13,6 +13,8 @@ MSG = {
         "INSUFFICIENT_BALANCE":{"code":207,"message":"insufficient balance"},
         "WRONG_ARGUMENT":   {"code":208,"message":"wrong argument"},
         "NO_CLAIM_GAS":     {"code":209,"message":"no gas to claim"},
+        "WRONG_FEE":        {"code":210,"message":"wrong fee"},
+        "INSUFFICIENT_FEE": {"code":211,"message":"insufficient fee"},
 
         "UNKNOWN_ERROR":    {"code":500,"message":"unknown error"}
         }
