@@ -21,7 +21,7 @@ def valid_net(net, request):
     return net == request.app['net']
 
 def valid_fee(fee):
-    return fee in ['0', '0.001', '0.01', '0.1', '1']
+    return check_decimal(fee, 8) and D('0') <= D(fee) <= D('1')
 
 def valid_platform(platform):
     return platform in ['ios','android']
