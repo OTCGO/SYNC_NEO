@@ -10,13 +10,16 @@ from coreweb import get, post, options
 from decimal import Decimal as D
 from binascii import hexlify, unhexlify
 from .tools import Tool, check_decimal, sci_to_str, big_or_little
-from .assets import NEO, SEAS, SEAC, CSEAS, CSEAC, ONT_ASSETS
+from .assets import NEO, GAS, SEAS, SEAC, CSEAS, CSEAC, ONT_ASSETS
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
 
 def valid_net(net, request):
     return net == request.app['net']
+
+def valid_fee(fee):
+    return check_decimal(fee, 8) and D('0') <= D(fee) <= D('1')
 
 def valid_platform(platform):
     return platform in ['ios','android']
@@ -435,7 +438,7 @@ async def swap(net, address, asset, request):
     return {'result':False, 'error':msg}
 
 @post('/{net}/transfer')
-async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
+async def transfer(net, request, *, source, dests, amounts, assetId, fee='0'):
     #params validation
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
@@ -450,8 +453,7 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
     dests,amounts = dests.split(','), amounts.split(',')
     ld,la = len(dests), len(amounts)
     if ld != la: return {'result':False, 'error':'length of dests != length of amounts'}
-    if nep5_asset and 1 != ld:
-        return {'result':False, 'error':"NEP5 token transfer only support One to One"}
+    if nep5_asset and 1 != ld: return {'result':False, 'error':"NEP5 token transfer only support One to One"}
     if False in map(Tool.validate_address, dests): return {'result':False, 'error':'wrong dests'}
     try:
         amounts = [D(a) for a in amounts]
@@ -459,22 +461,42 @@ async def transfer(net, request, *, source, dests, amounts, assetId, **kw):
         return {'result':False, 'error':'wrong amounts'}
     if [a for a in amounts if a <= D(0)]: return {'result':False, 'error':'wrong amounts'}
     if False in [check_decimal(a,ad) for a in amounts]: return {'result':False, 'error':'wrong amounts'}
+    if not valid_fee(fee): return {'result':False, 'error':'wrong fee'}
+    fee = D(fee)
     #check balance && transaction
+    fee_utxos = []
+    freeze_utxos = []
     tran_num = sum(amounts)
     if nep5_asset:
         balance = D(await mysql_get_nep5_asset_balance(request.app['pool'], source, assetId))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         transaction = Tool.transfer_nep5(assetId, source, dests[0], amounts[0], ad)
-        result,msg = True,''
+        if fee > 0:
+            fee_utxos = await mysql_get_utxo(request.app['pool'], source, GAS[2:])
+            fee_balance = sum([D(i['value']) for i in fee_utxos])
+            if fee_balance < fee: return {'result':False, 'error':'insufficient fee'}
+            fee_transaction,spent_utxos,msg = Tool.transfer_global_with_fee(source, [], [], '', fee, fee_utxos, GAS[2:])
+            if spent_utxos: freeze_utxos.extend(spent_utxos)
+            else: return {'result':False, 'error':'unknown error:'+msg}
+            transaction = transaction[0:-4] + fee_transaction[6:]
     if global_asset:
+        if fee > 0:
+            if assetId != GAS[2:]:
+                fee_utxos = await mysql_get_utxo(request.app['pool'], source, GAS[2:])
+                fee_balance = sum([D(i['value']) for i in fee_utxos])
+                if fee_balance < fee: return {'result':False, 'error':'insufficient fee'}
+            else:
+                tran_num += fee
         utxo = await mysql_get_utxo(request.app['pool'], source, assetId)
         balance = sum([D(i['value']) for i in utxo])
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
         items = [(dests[i],amounts[i]) for i in range(len(dests))]
-        transaction,result,msg = Tool.transfer_global_with_fee(source, utxo, items, assetId)
-    if result:
-        return {'result':True, 'transaction':transaction}
-    return {'result':False, 'error':msg}
+        transaction,spent_utxos,msg = Tool.transfer_global_with_fee(source, utxo, items, assetId, fee, fee_utxos, GAS[2:])
+        if spent_utxos:
+            if fee > 0: freeze_utxos.extend(spent_utxos)
+        else:
+            return {'result':False, 'error':'unknown error:'+msg}
+    return {'result':True, 'transaction':transaction}
 
 @post('/{net}/gas')
 async def gas(net, request, *, publicKey, **kw):
