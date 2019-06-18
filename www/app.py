@@ -121,6 +121,7 @@ async def get_sync_height(pool):
     return await get_height(pool, 'utxo')
 
 async def update_height(pool, cache):
+    cache.evict()
     r = await get_sync_height(pool)
     old = cache.get('height')
     height = r + 1
@@ -264,7 +265,7 @@ async def init(loop):
     app['ont_uri'] = ont_uri
     app['net'] = get_net()
     app['super_node_uri'] = super_node_uri
-    app['cache'] = Cache()
+    app['cache'] = Cache(maxsize=0)
     await init_cache(app)
     app['ont_genesis_block_timestamp'] = get_ont_genesis_block_timestamp()
     scheduler = AsyncIOScheduler(job_defaults = {

@@ -144,6 +144,22 @@ async def mysql_get_block(pool, b):
     if r: return {'sys_fee':r[0][0], 'total_sys_fee':r[0][1]}
     return None
 
+async def cache_utxo(request, txid, utxos):
+    cache = request.app['cache']
+    if len(utxos) ==0: return
+    if cache.has(txid): return
+    cache.set(txid, utxos, ttl=120)
+
+async def mysql_freeze_utxo(request, txid):
+    cache = request.app['cache']
+    utxos = cache.get(txid, [])
+    if utxos:
+        pool = request.app['pool']
+        sql = "UPDATE utxos SET status=2 where txid='%s' and index_n=%s and status=1"
+        data = [('0x'+u['prevHash'],u['prevIndex']) for u in utxos]
+        await asyncio.gather(*[mysql_insert_one(pool, sql % d) for d in data])
+        cache.delete(txid)
+
 async def mysql_get_balance(request, address):
     assets = request.app['cache'].get('assets')
     sql = "SELECT asset,value FROM balance WHERE address='%s';" % address
@@ -479,6 +495,7 @@ async def transfer_v2(net, request, *, source, dests, amounts, assetId, fee='0')
             request['result'].update(MSG['UNKNOWN_ERROR'])
             request['result']['message'] += ':'+msg
             return
+    if freeze_utxos: await cache_utxo(request, Tool.compute_txid(transaction), freeze_utxos)
     request['result']['data'] = {'transaction':transaction}
 
 @format_result(['net'])
@@ -516,11 +533,15 @@ async def broadcast_v2(net, request, *, publicKey, signature, transaction):
         r = await asyncio.gather(*[send_raw_transaction(t, request) for t in [tx1, tx2]])
         for i in range(2):
             result,msg = r[i]
-            if result: request['result']['data'] = {'txid':txid};return
+            if result:
+                await mysql_freeze_utxo(request, txid)
+                request['result']['data'] = {'txid':txid};return
     else:
         tx = Tool.get_transaction(publicKey, signature, transaction)
         result,msg = await send_raw_transaction(tx, request)
-        if result: request['result']['data'] = {'txid':txid};return
+        if result:
+            await mysql_freeze_utxo(request, txid)
+            request['result']['data'] = {'txid':txid};return
     request['result'].update(MSG['UNKNOWN_ERROR'])
     request['result']['message'] += ':'+msg
 
