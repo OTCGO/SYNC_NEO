@@ -1,9 +1,12 @@
 [[source]]
+
 url = "https://pypi.douban.com/simple"
 verify_ssl = true
 name = "pypi"
 
+
 [packages]
+
 aiohttp = "*"
 uvloop = "*"
 python-dotenv = "*"
@@ -11,6 +14,9 @@ logzero = "*"
 "base58" = "*"
 aiomysql = "*"
 apscheduler = "*"
+bitcoin = "*"
+
 
 [dev-packages]
+
 ipython = "*"

@@ -147,7 +147,7 @@ async def mysql_get_block(pool, b):
 async def cache_utxo(request, txid, utxos):
     cache = request.app['cache']
     if len(utxos) ==0: return
-    if cache.has(txid): return
+    if cache.has(txid): cache.delete(txid)
     cache.set(txid, utxos, ttl=120)
 
 async def mysql_freeze_utxo(request, txid):
