@@ -4,7 +4,10 @@
 # Licensed under the MIT License.
 
 import time
+import hashlib
 import datetime
+from binascii import unhexlify
+from base58 import b58encode
 
 
 class CommonTool:
@@ -41,3 +44,20 @@ class CommonTool:
     @staticmethod
     def timestamp_to_utc(timestamp):
         return datetime.datetime.utcfromtimestamp(timestamp)
+
+    @staticmethod
+    def hash256(b):
+        return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+    @classmethod
+    def scripthash_to_address(cls, sh):
+        tmp = unhexlify('17' + sh)
+        tmp = b58encode(tmp + cls.hash256(tmp)[:4])
+        if isinstance(tmp, bytes):
+            return tmp.decode('utf8')
+        return tmp
+
+    @classmethod
+    def hex_to_biginteger(cls, fixed8_str):
+        hex_str = cls.big_or_little(fixed8_str)
+        return int('0x' + hex_str, 16)

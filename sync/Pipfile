@@ -15,6 +15,7 @@ logzero = "*"
 aiomysql = "*"
 apscheduler = "*"
 bitcoin = "*"
+ontology-python-sdk = "*"
 
 
 [dev-packages]

@@ -14,6 +14,9 @@ from Crawler import Crawler
 from decimal import Decimal as D
 from Config import Config as C
 from CommonTool import CommonTool as CT
+from ontology.sdk import Ontology
+from ontology.contract.neo.oep4 import Oep4
+from ontology.exception.exception import SDKException
 
 
 class OEP4History(Crawler):
@@ -33,7 +36,9 @@ class OEP4History(Crawler):
         self.cache_decimals = {
                 "0000000000000000000000000000000000000001":0,#ONT
                 "0000000000000000000000000000000000000002":9,#ONG
+                "6c80f3a5c183edee7693a038ca8c476fb0d6ac91":1
                 }
+        self.sdk = Ontology(rpc_address=self.neo_uri)
 
     async def get_smartcodeevent(self, height):
         async with self.session.post(self.neo_uri, timeout=60,
@@ -50,6 +55,10 @@ class OEP4History(Crawler):
 
     async def update_a_oep4history(self, txid, operation, index, address, value, dest, timepoint, asset):
         sql="""INSERT IGNORE INTO %s(txid,operation,index_n,address,value,dest,timepoint,asset) VALUES ('%s','%s',%s,'%s','%s','%s',%s,'%s');""" % (self.name,txid,operation,index,address,value,dest,timepoint,asset)
+        await self.mysql_insert_one(sql)
+
+    async def mysql_new_oep4(self, asset, decimals, symbol, name):
+        sql = """INSERT IGNORE INTO assets(asset,type,name,symbol,version,decimals,contract_name) VALUES('%s','OEP4','%s','%s','0',%s,'%s');""" % (asset,name,symbol,decimals,name)
         await self.mysql_insert_one(sql)
 
     async def deal_with(self):
@@ -78,11 +87,44 @@ class OEP4History(Crawler):
                     timepoint = self.cache[h]['timestamp']
                     index = 0
                     for n in e['Notify']:
-                        asset = CT.big_or_little(n['ContractAddress'])
+                        asset = n['ContractAddress']
+                        if asset in ['0100000000000000000000000000000000000000','0200000000000000000000000000000000000000']:
+                            asset = CT.big_or_little(n['ContractAddress'])
+                        if asset not in self.cache_decimals.keys() and n['States'][0] in ["7472616e73666572", "5452414e53464552"]:
+                            #sync asset to db
+                            o4 = Oep4(asset, sdk=self.sdk)
+                            try:
+                                decimals = o4.decimals()
+                                name = o4.name().strip()
+                                symbol = o4.symbol().strip()
+                                if decimals >= 0 and len(symbol) >= 2 and len(name) >= 2:
+                                    await self.mysql_new_oep4(asset, decimals, symbol, name)
+                                    self.cache_decimals[asset] = decimals #update cache_decimals
+                            except SDKException:
+                                pass
+                            except Exception as e:
+                                logger.error('ONT SYNC ASSET ERROR: {}'.format(e.args[0]))
+                                sys.exit(1)
+                            finally:
+                                del o4
                         if asset in self.cache_decimals.keys():
-                            address = n['States'][1]
-                            dest = n['States'][2]
-                            value = CT.sci_to_str(str(D(n['States'][3])/D(math.pow(10,self.cache_decimals[asset]))))
+                            if asset in ['0000000000000000000000000000000000000001','0000000000000000000000000000000000000002']:
+                                address = n['States'][1]
+                                dest = n['States'][2]
+                                value = CT.sci_to_str(str(D(n['States'][3])/D(math.pow(10,self.cache_decimals[asset]))))
+                            else:
+                                if asset in ["6c80f3a5c183edee7693a038ca8c476fb0d6ac91"]:
+                                    address = n['States'][0]
+                                    dest = n['States'][1]
+                                    value = n['States'][2]
+                                else:
+                                    address = n['States'][1]
+                                    dest = n['States'][2]
+                                    value = n['States'][3]
+                                address = CT.scripthash_to_address(address)
+                                dest = CT.scripthash_to_address(dest)
+                                value = CT.hex_to_biginteger(value)
+                                value = CT.sci_to_str(str(D(value)/D(math.pow(10,self.cache_decimals[asset]))))
                             index = index + 1
                             index_n = index
                             his.append([txid, 'out', index_n, address, value, dest,    timepoint, asset])
