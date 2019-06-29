@@ -41,7 +41,6 @@ class OEP4UPT(Crawler):
         if self.cache_decimals.get(asset): return self.cache_decimals[asset]
         sql = "SELECT decimals FROM assets WHERE asset='%s';" % (asset)
         r = await self.mysql_query_one(sql)
-        logger.error('result: {}'.format(r))
         if r: self.cache_decimals[asset] = r[0][0]
         else: self.cache_decimals[asset] = -1
         return self.cache_decimals[asset]
@@ -86,7 +85,6 @@ class OEP4UPT(Crawler):
                 finally:
                     del o4
                 d = await self.get_oep4_decimals(asset)
-                logger.error('get asset decimals {}-{}(type:{})'.format(asset,d,type(d)))
                 if d >= 0: return CT.sci_to_str(str(D(b)/D(math.pow(10, d))))
                 else: return '-1'
         return '-1'
