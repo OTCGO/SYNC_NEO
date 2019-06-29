@@ -15,6 +15,9 @@ from Config import Config as C
 from decimal import Decimal as D
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 from CommonTool import CommonTool as CT
+from ontology.sdk import Ontology
+from ontology.contract.neo.oep4 import Oep4
+from ontology.exception.exception import SDKException
 
 
 class OEP4UPT(Crawler):
@@ -31,6 +34,17 @@ class OEP4UPT(Crawler):
         self.cache = {}
         self.sem = asyncio.Semaphore(value=self.max_tasks)
         self.session = aiohttp.ClientSession(loop=loop)
+        self.sdk = Ontology(rpc_address=self.neo_uri)
+        self.cache_decimals = {}
+
+    async def get_oep4_decimals(self, asset):
+        if self.cache_decimals.get(asset): return self.cache_decimals[asset]
+        sql = "SELECT decimals FROM assets WHERE asset='%s';" % (asset)
+        r = await self.mysql_query_one(sql)
+        logger.error('result: {}'.format(r))
+        if r: self.cache_decimals[asset] = r[0][0]
+        else: self.cache_decimals[asset] = -1
+        return self.cache_decimals[asset]
 
     async def get_address_info_to_update(self, height):
         sql = "SELECT address,asset FROM upt where chain='%s' AND update_height < %s limit %s;" % (self.chain, height, self.max_tasks)
@@ -64,8 +78,18 @@ class OEP4UPT(Crawler):
             elif '0000000000000000000000000000000000000002' == asset:
                 return await self.get_ont_balance(address,'ong')
             else:
-                pass
-        sys.exit(1)
+                try:
+                    o4 = Oep4(asset, sdk=self.sdk)
+                    b = o4.balance_of(address)
+                except SDKException:
+                    return '-1'
+                finally:
+                    del o4
+                d = await self.get_oep4_decimals(asset)
+                logger.error('get asset decimals {}-{}(type:{})'.format(asset,d,type(d)))
+                if d >= 0: return CT.sci_to_str(str(D(b)/D(math.pow(10, d))))
+                else: return '-1'
+        return '-1'
 
 
     async def infinite_loop(self):
@@ -80,7 +104,7 @@ class OEP4UPT(Crawler):
                     address = upt[0]
                     asset = upt[1]
                     r = result[i]
-                    data.append((address,asset,r,current_height,r,current_height))
+                    if r!= '-1': data.append((address,asset,r,current_height,r,current_height))
                 await self.update_address_balances(data)
                 await self.update_upts(upts, current_height)
 

@@ -59,5 +59,6 @@ class CommonTool:
 
     @classmethod
     def hex_to_biginteger(cls, fixed8_str):
+        if not fixed8_str: return 0
         hex_str = cls.big_or_little(fixed8_str)
         return int('0x' + hex_str, 16)
