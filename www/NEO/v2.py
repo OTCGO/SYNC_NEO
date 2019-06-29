@@ -10,7 +10,7 @@ from coreweb import get, post, options
 from decimal import Decimal as D
 from binascii import hexlify, unhexlify
 from .tools import Tool, check_decimal, sci_to_str, big_or_little
-from .assets import NEO, GAS, SEAS, SEAC, CSEAS, CSEAC, ONT_ASSETS
+from .assets import NEO, GAS, SEAS, SEAC, CSEAS, CSEAC
 import logging
 logging.basicConfig(level=logging.DEBUG)
 from .decorator import *
@@ -98,29 +98,6 @@ async def get_resolve_address(resolve_invoke, request):
         return ''
     return ''
 
-async def get_rpc_ont(request,method,params):
-    async with request.app['session'].post(request.app['ont_uri'],
-            json={'jsonrpc':'2.0','method':method,'params':params,'id':1}) as resp:
-        if 200 != resp.status:
-            msg = 'Unable to visit %s %s' % (request.app['ont_uri'], method)
-            logging.error(msg)
-            return None,msg
-        j = await resp.json()
-        if 'SUCCESS' != j['desc']:
-            msg = 'result error when %s %s:%s' % (request.app['ont_uri'], method, j['error'])
-            logging.error(msg)
-            return None,msg
-        return j['result'],None
-
-async def get_ont_balance(request, address, asset_name=None):
-    result,err = await get_rpc_ont(request, 'getbalance', [address])
-    if err or not result: return {'ont':"0",'ong':"0"}
-    for i in result:
-        if ONT_ASSETS[i]['decimal'] > 1:
-            result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, ONT_ASSETS[i]['decimal']))))
-    if not asset_name: return result
-    return result[asset_name]
-
 async def get_mysql_cursor(pool):
     conn = await pool.acquire()
     cur  = await conn.cursor()
@@ -172,8 +149,11 @@ async def mysql_get_balance(request, address):
     for n in assets['NEP5']:
         if n not in result.keys(): balance[n] = '0'
         else: balance[n] = result[n]
+    for a in assets['ONTNATIVE']:
+        if a not in result.keys(): balance[a] = '0'
+        else: balance[a] = result[a]
     for o in assets['OEP4']:
-        if o not in result.keys(): balance[n] = '0'
+        if o not in result.keys(): balance[o] = '0'
         else: balance[o] = result[o]
     return balance
 
@@ -314,7 +294,6 @@ async def address_v2(net, address, request):
     data = []
     xresult = await asyncio.gather(
                 mysql_get_balance(request, address),
-                get_ont_balance(request, address),
                 mysql_update_nep5(request, address)
             )
     assets = get_all_asset(request)
@@ -331,8 +310,18 @@ async def address_v2(net, address, request):
             d['id'] = i
             d['balance'] = xresult[0][i]
             data.append(d)
-    data.append({'chain':"ONT",'type':"OEP4","name":"ONT","symbol":"Ontology-ONT","decimals":0,'id':ONT_ASSETS['ont']['scripthash'],'balance':xresult[1]['ont']})
-    data.append({'chain':"ONT",'type':"OEP4","name":"ONG","symbol":"Ontology-ONG","decimals":9,'id':ONT_ASSETS['ong']['scripthash'],'balance':xresult[1]['ong']})
+        if i in assets['ONTNATIVE'].keys():
+            d = assets['ONTNATIVE'][i]
+            d['chain'] = "ONT"
+            d['id'] = i
+            d['balance'] = xresult[0][i]
+            data.append(d)
+        if i in assets['OEP4'].keys():
+            d = assets['OEP4'][i]
+            d['chain'] = "ONT"
+            d['id'] = i
+            d['balance'] = xresult[0][i]
+            data.append(d)
     request['result']['data'] = data
 
 @format_result(['net','address'])

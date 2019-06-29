@@ -151,7 +151,7 @@ async def update_assets(pool, cache):
         {"name":"Ontology Token","symbol":"ontology-ONT","decimals":"0","type":"ONTOLOGY","id":'0000000000000000000000000000000000000001'},
         {"name":"Ontology Gas",  "symbol":"ontology-ONG","decimals":"9","type":"ONTOLOGY","id":'0000000000000000000000000000000000000002'}
         ]}
-    assets = {'state':state, 'GLOBAL':{}, 'NEP5':{}, 'OEP4':{}}
+    assets = {'state':state, 'GLOBAL':{}, 'NEP5':{}, 'ONTNATIVE':{}, 'OEP4':{}}
     conn, cur = await get_mysql_cursor(pool)
     try:
         await cur.execute("select asset,type,name,symbol,decimals from assets;")
@@ -164,8 +164,10 @@ async def update_assets(pool, cache):
                 elif 'NEP5' == r[1]:
                     old_assets['NEP5'].append({'name':r[2],'symbol':r[3],'decimals':str(r[4]),'type':r[1],'id':r[0]})
                     assets['NEP5'][r[0]]    = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
+                elif 'ONTNATIVE' == r[1]:
+                    assets['ONTNATIVE'][r[0]]   = {'type':r[1],'name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4]}
                 elif 'OEP4' == r[1]:
-                    assets['GLOBAL'][r[0]]  = {'type':r[1],'name':r[2],'symbol':r[3],'decimals':r[4]}
+                    assets['OEP4'][r[0]]  = {'type':r[1],'name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4]}
     except Exception as e:
         logging.error("mysql SELECT failure:{}".format(e.args[0]))
         sys.exit(1)
