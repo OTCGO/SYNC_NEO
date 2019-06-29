@@ -15,6 +15,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 from .decorator import *
 from message import MSG
+from copy import deepcopy
 
 
 def valid_net(net, request):
@@ -299,25 +300,25 @@ async def address_v2(net, address, request):
     assets = get_all_asset(request)
     for i in xresult[0]:
         if i in assets['GLOBAL'].keys():
-            d = assets['GLOBAL'][i]
+            d = deepcopy(assets['GLOBAL'][i])
             d['chain'] = "NEO"
             d['id'] = i
             d['balance'] = xresult[0][i]
             data.append(d)
         if i in assets['NEP5'].keys():
-            d = assets['NEP5'][i]
+            d = deepcopy(assets['NEP5'][i])
             d['chain'] = "NEO"
             d['id'] = i
             d['balance'] = xresult[0][i]
             data.append(d)
         if i in assets['ONTNATIVE'].keys():
-            d = assets['ONTNATIVE'][i]
+            d = deepcopy(assets['ONTNATIVE'][i])
             d['chain'] = "ONT"
             d['id'] = i
             d['balance'] = xresult[0][i]
             data.append(d)
         if i in assets['OEP4'].keys():
-            d = assets['OEP4'][i]
+            d = deepcopy(assets['OEP4'][i])
             d['chain'] = "ONT"
             d['id'] = i
             d['balance'] = xresult[0][i]
