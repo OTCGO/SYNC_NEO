@@ -37,14 +37,11 @@ UNBOUND_DEADLINE = unbound_deadline()
 def valid_net(net, request):
     return net == request.app['net']
 
-def get_asset_name(aid):
-    for a in assets:
-        if aid == assets[a]['scripthash']:
-            return a
-    return ''
-
-def get_asset_decimal(aname):
-    return assets[aname]['decimal']
+def get_an_ont_asset(request, i):
+    cassets = request.app['cache'].get('assets')
+    if i in cassets['ONTNATIVE'].keys(): return cassets['ONTNATIVE'][i]
+    if i in cassets['OEP4'].keys(): return cassets['OEP4'][i]
+    return None
 
 async def get_rpc_ont(request,method,params):
     async with request.app['session'].post(request.app['ont_uri'],
@@ -68,6 +65,29 @@ async def get_ont_balance(request, address, asset_name=None):
             result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, assets[i]['decimal']))))
     if not asset_name: return result
     return result[asset_name]
+
+async def get_mysql_cursor(pool):
+    conn = await pool.acquire()
+    cur  = await conn.cursor()
+    return conn, cur
+
+async def mysql_query_one(pool, sql):
+    conn, cur = await get_mysql_cursor(pool)
+    logging.info('SQL:%s' % sql)
+    try:
+        await cur.execute(sql)
+        return await cur.fetchall()
+    except Exception as e:
+        logging.error("mysql QUERY failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        await pool.release(conn)
+
+async def mysql_get_oep4_balance(pool, address, asset):
+    sql = "SELECT value FROM balance WHERE address='%s' AND asset='%s';" % (address, asset)
+    r = await mysql_query_one(pool, sql)
+    if r: return r[0][0]
+    return '0'
 
 async def get_unclaim_ong(request, address):
     result,err = await get_rpc_ont(request, 'getunboundong', [address])
@@ -157,9 +177,9 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(source): return {'result':False, 'error':'wrong source'}
     if assetId.startswith('0x'): assetId = assetId[2:]
-    aname = get_asset_name(assetId)
-    if not aname: return {'result':False, 'error':'wrong assetId'}
-    ad = get_asset_decimal(aname)
+    assetInfo = get_an_ont_asset(request, assetId)
+    if not assetInfo: return {'result':False, 'error':'wrong assetId'}
+    ad = assetInfo['decimals']
     dests,amounts = dests.split(','), amounts.split(',')
     ld,la = len(dests), len(amounts)
     if ld != la: return {'result':False, 'error':'length of dests != length of amounts'}
@@ -170,22 +190,26 @@ async def transfer_ont(net, request, *, source, dests, amounts, assetId, **kw):
     except:
         return {'result':False, 'error':'wrong amounts'}
     if [a for a in amounts if a <= D(0)]: return {'error':'wrong amounts'}
-    if False in [check_decimal(a,ad) for a in amounts]:
-        return {'result':False, 'error':'wrong amounts'}
+    if False in [check_decimal(a,ad) for a in amounts]: return {'result':False, 'error':'wrong amounts'}
     #check balance && transaction
     tran_num = sum(amounts)
-    balance = D(await get_ont_balance(request, source, aname))
-    if 'ong' == aname:
-        if balance < tran_num + D('0.01'): return {'result':False, 'error':'insufficient balance'}
-    else:
-        ong_balance = D(await get_ont_balance(request, source, 'ong'))
-        if ong_balance < D('0.01'): return {'result':False, 'error':'insufficient fee'}
+    ong_balance = D(await get_ont_balance(request, source, 'ong'))
+    if ong_balance < D('0.01'): return {'result':False, 'error':'insufficient fee'}
+    if '0000000000000000000000000000000000000001' == assetId:
+        balance = D(await get_ont_balance(request, source, 'ont'))
         if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
-    transaction = Tool.transfer_ontology(net, assetId, source, dests[0], amounts[0], ad)
-    result,msg = True,''
-    if result:
-        return {'result':True, 'sigdata':big_or_little(Tool.compute_txid(transaction)), 'transaction':transaction}
-    return {'result':False, 'error':msg}
+    elif '0000000000000000000000000000000000000002' == assetId:
+        if ong_balance < tran_num + D('0.01'): return {'result':False, 'error':'insufficient balance'}
+    else:
+        balance = D(await mysql_get_oep4_balance(request.app['pool'], source, assetId))
+        if balance < tran_num: return {'result':False, 'error':'insufficient balance'}
+    if 'ONTNATIVE' == assetInfo['type']:
+        transaction = Tool.transfer_ontology(net, assetId, source, dests[0], amounts[0], ad)
+    elif 'OEP4' == assetInfo['type']:
+        transaction = Tool.transfer_oep4(assetId, source, dests[0], amounts[0], ad)
+    else:
+        return {'result':False, 'error':'wrong argument'}
+    return {'result':True, 'sigdata':big_or_little(Tool.compute_txid(transaction)), 'transaction':transaction}
 
 @post('/{net}/ong')
 async def ong(net, request, *, publicKey, **kw):

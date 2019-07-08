@@ -158,6 +158,20 @@ async def mysql_freeze_utxo(request, txid):
         await asyncio.gather(*[mysql_insert_one(pool, sql % d) for d in data])
         cache.delete(txid)
 
+async def mysql_get_neo_balance(request, address):
+    assets = request.app['cache'].get('assets')
+    sql = "SELECT asset,value FROM balance WHERE address='%s';" % address
+    result = await mysql_query_one(request.app['pool'], sql)
+    result = dict(result)
+    balance = {}
+    for g in assets['GLOBAL']:
+        if g not in result.keys(): balance[g] = '0'
+        else: balance[g] = result[g]
+    for n in assets['NEP5']:
+        if n not in result.keys(): balance[n] = '0'
+        else: balance[n] = result[n]
+    return balance
+
 async def mysql_get_balance(request, address):
     assets = request.app['cache'].get('assets')
     sql = "SELECT asset,value FROM balance WHERE address='%s';" % address
@@ -170,8 +184,11 @@ async def mysql_get_balance(request, address):
     for n in assets['NEP5']:
         if n not in result.keys(): balance[n] = '0'
         else: balance[n] = result[n]
+    for a in assets['ONTNATIVE']:
+        if a not in result.keys(): balance[a] = '0'
+        else: balance[a] = result[a]
     for o in assets['OEP4']:
-        if o not in result.keys(): balance[n] = '0'
+        if o not in result.keys(): balance[o] = '0'
         else: balance[o] = result[o]
     return balance
 
@@ -278,6 +295,7 @@ def get_an_asset(i, request):
     assets = request.app['cache'].get('assets')
     if i in assets['GLOBAL'].keys(): return assets['GLOBAL'][i]
     if i in assets['NEP5'].keys(): return assets['NEP5'][i]
+    if i in assets['ONTNATIVE'].keys(): return assets['ONTNATIVE'][i]
     if i in assets['OEP4'].keys(): return assets['OEP4'][i]
     return None
 
@@ -355,7 +373,7 @@ async def address(net, address, request):
     if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
     if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
     xresult = await asyncio.gather(
-                mysql_get_balance(request, address),
+                mysql_get_neo_balance(request, address),
                 get_ont_balance(request, address),
                 mysql_update_nep5(request, address)
             )
@@ -363,6 +381,17 @@ async def address(net, address, request):
     aresult = xresult[1]
     result['balances'][ONT_ASSETS['ont']['scripthash']] = aresult['ont']
     result['balances'][ONT_ASSETS['ong']['scripthash']] = aresult['ong']
+    return result
+
+@get('/{net}/address/neo/{address}')
+async def address_neo(net, address, request):
+    if not valid_net(net, request): return {'result':False, 'error':'wrong net'}
+    if not Tool.validate_address(address): return {'result':False, 'error':'wrong address'}
+    xresult = await asyncio.gather(
+                mysql_get_balance(request, address),
+                mysql_update_nep5(request, address)
+            )
+    result = {'_id':address,'balances': xresult[0]}
     return result
 
 @get('/{net}/claim/{address}')
