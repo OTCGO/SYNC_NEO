@@ -268,6 +268,7 @@ def get_an_asset(i, request):
     assets = request.app['cache'].get('assets')
     if i in assets['GLOBAL'].keys(): return assets['GLOBAL'][i]
     if i in assets['NEP5'].keys(): return assets['NEP5'][i]
+    if i in assets['ONTNATIVE'].keys(): return assets['ONTNATIVE'][i]
     if i in assets['OEP4'].keys(): return assets['OEP4'][i]
     return None
 

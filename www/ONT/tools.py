@@ -63,7 +63,6 @@ class Tool:
 
     @staticmethod
     def decimal_to_hex(ds, length=8, decimals=8):
-        if 1 == decimals: decimals = 0
         hex_str = hex(int(ds*D(math.pow(10,decimals))))[2:]
         if len(hex_str)%2:
             hex_str = '0' + hex_str
@@ -285,6 +284,29 @@ class Tool:
         if 1 == len(faLen) % 2:
             faLen = '0' + faLen
         script += faLen + fa + '6a7cc8' + '6c51c1' + '087472616e73666572' + '14' + apphash + '0068164f6e746f6c6f67792e4e61746976652e496e766f6b65'
+        scriptLen = hex(len(script)//2)[2:]
+        if 1 == len(scriptLen) % 2:
+            scriptLen = '0' + scriptLen
+        s += scriptLen + script + '00'
+        return s
+
+    @classmethod
+    def transfer_oep4(cls, apphash, source, dest, value, decimals):
+        '''
+        构建ontology代币转账InvocationTransaction
+        '''
+        s = '00'    #version
+        s += 'd1'   #TransactionType
+        s += cls.get_random_byte_str(4) #Nonce
+        s += 'f401000000000000'        #GasPrice
+        s += '204e000000000000'        #GasLimit
+        s += cls.address_to_scripthash(source) #Payer
+        script = ''
+        fa = cls.decimal_to_hex(value, 8, decimals)
+        faLen = hex(len(fa)//2)[2:]
+        if 1 == len(faLen) % 2:
+            faLen = '0' + faLen
+        script += faLen + fa + '14' + cls.address_to_scripthash(dest) + '14' + cls.address_to_scripthash(source) + '53c1087472616e7366657267' + big_or_little(apphash)
         scriptLen = hex(len(script)//2)[2:]
         if 1 == len(scriptLen) % 2:
             scriptLen = '0' + scriptLen

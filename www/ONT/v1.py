@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 assets = {
         'ont':{
             'scripthash':'0000000000000000000000000000000000000001',
-            'decimal':1
+            'decimal':0
             },
         'ong':{
             'scripthash':'0000000000000000000000000000000000000002',
@@ -64,7 +64,7 @@ async def get_ont_balance(request, address, asset_name=None):
     result,err = await get_rpc_ont(request, 'getbalance', [address])
     if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
-        if assets[i]['decimal'] > 1:
+        if assets[i]['decimal'] > 0:
             result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, assets[i]['decimal']))))
     if not asset_name: return result
     return result[asset_name]
