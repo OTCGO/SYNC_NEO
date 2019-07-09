@@ -189,10 +189,10 @@ async def mysql_get_nep5_asset_balance(pool, address, asset):
 
 async def mysql_get_history(pool, address, asset, offset, length):
     if asset:
-        if asset in ['0000000000000000000000000000000000000001','0000000000000000000000000000000000000002']:
-            sql = "SELECT txid,timepoint,operation,value,asset FROM oep4_history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
+        if asset['type'] in ['ONTNATIVE','OEP4']:
+            sql = "SELECT txid,timepoint,operation,value,asset FROM oep4_history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset['id'], offset, length)
         else:
-            sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset, offset, length)
+            sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' AND asset='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, asset['id'], offset, length)
     else:
         sql = "SELECT txid,timepoint,operation,value,asset FROM history WHERE address='%s' ORDER BY timepoint DESC limit %s,%s;" % (address, offset, length)
     result = []
@@ -369,6 +369,10 @@ async def history_v2(net, address, request, *, asset=0, index=0, length=20):
     if 0 != asset:
         if asset.startswith('0x'): asset = asset[2:]
         if not valid_asset(asset): request['result'].update(MSG['WRONG_ASSET']);return
+        aid = asset
+        asset = deepcopy(get_an_asset(aid, request))
+        if not asset: request['result'].update(MSG['WRONG_ASSET']);return
+        asset['id'] = aid
     else: asset = None
     result = await mysql_get_history(request.app['pool'], address, asset, index, length)
     request['result']['data'] = result
