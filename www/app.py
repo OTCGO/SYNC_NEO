@@ -168,7 +168,7 @@ async def update_assets(pool, cache):
                     assets['ONTNATIVE'][r[0]]   = {'type':r[1],'name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4]}
                 elif 'OEP4' == r[1]:
                     assets['OEP4'][r[0]]  = {'type':r[1],'name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4]}
-                    old_assets['ONTOLOGY'].append({'type':r[1],'name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4],'id':r[0]})
+                    old_assets['ONTOLOGY'].append({'type':'ONTOLOGY','name':r[2],'symbol':'ontology-'+r[3],'decimals':r[4],'id':r[0]})
     except Exception as e:
         logging.error("mysql SELECT failure:{}".format(e.args[0]))
         sys.exit(1)
