@@ -116,7 +116,7 @@ async def get_ont_balance(request, address, asset_name=None):
     if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
         if ONT_ASSETS[i]['decimal'] > 0:
-            result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, ONT_ASSETS[i]['decimal']))))
+            result[i] = str(D(result[i])/D(math.pow(10, ONT_ASSETS[i]['decimal'])))
     if not asset_name: return result
     return result[asset_name]
 

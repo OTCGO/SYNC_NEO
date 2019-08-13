@@ -202,6 +202,11 @@ async def mysql_get_history(pool, address, asset, offset, length):
         else: result.append({'txid':i[0],'time':i[1],'asset':i[4],'value':i[3],'operation':i[2]})
     return result
 
+async def mysql_get_ranks_count(pool, asset):
+    sql = "SELECT count(address) FROM balance WHERE asset='%s' AND value<>'0';" % asset
+    r = await mysql_query_one(pool, sql)
+    return r[0][0]
+
 async def mysql_get_ranks(pool, asset, offset, length):
     sql = "SELECT address,value FROM balance WHERE asset='%s' AND value<>'0' ORDER BY --value DESC limit %s,%s;" % (asset, offset, length)
     result = []
@@ -425,6 +430,7 @@ async def rankings_v2(net, asset, request, *, index=0, length=100):
     if asset.startswith('0x'): asset = asset[2:]
     if not valid_asset(asset): request['result'].update(MSG['WRONG_ASSET']);return
     request['result']['data'] = await mysql_get_ranks(request.app['pool'], asset, index, length)
+    request['result']['total'] = await mysql_get_ranks_count(request.app['pool'], asset)
 
 @format_result(['net'])
 @post('/v2/{net}/transfer')
