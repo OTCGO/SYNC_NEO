@@ -10,6 +10,10 @@ from .decorator import *
 from message import MSG
 
 
+def valid_net(net, request):
+    return net == request.app['net']
+
+
 @format_result(['net','address'])
 @get('/v2/{net}/node/status/{address}')
 async def node_status(net, address, request):
