@@ -37,7 +37,7 @@ class DB:
             return conn, cur
         except Exception as e:
             logger.error("mysql SQL:{} failure:{}".format(sql, e.args[0]))
-            sys.exit(1)
+            raise e
 
     async def mysql_insert_one(self, sql):
         conn, cur = None, None
@@ -71,7 +71,7 @@ class DB:
             return await cur.fetchall()
         except Exception as e:
             logger.error("mysql QUERY failure:{}".format(e.args[0]))
-            sys.exit(1)
+            raise e
         finally:
             if conn:
                 await self.pool.release(conn)
@@ -109,11 +109,11 @@ class DB:
         await self.mysql_insert_one(sql)
 
     async def get_max_node_layer(self):
-        return 0
+        return 1
 
     async def get_node_for_bonus(self, layer):
         sql = "SELECT status,referrer,address,amount,days,layer,nextbonustime,nodelevel FROM node WHERE layer = %s;" % layer
-        results = self.mysql_query_many(sql)
+        results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
             node = Node()
@@ -128,3 +128,11 @@ class DB:
             nodes.append(node)
         return nodes
 
+    async def insert_node_bonus(self, address, locked_bonus, team_bonus, amount, total, remain, bonus_time):
+        '''插入分红记记录'''
+
+    async def get_node_bonus(self, address, bonus_time):
+        '''获得节点分红记录'''
+
+    async def add_node_bonus(self, node):
+        '''增加分红记录，并更新节点状态'''

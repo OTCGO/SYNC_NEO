@@ -1,3 +1,31 @@
+
+def dec_to_n(n,x):
+    '''十进制转为N进制'''
+    #n为待转换的十进制数，x为进制，取值为2-20
+    a = [0,1,2,3,4,5,6,7,8,9,'A','b','C','D','E','F','G','H','I','J']
+    b = []
+    while True:
+        s = n//x  # 商
+        y = n%x  # 余数
+        b = b+[y]
+        if s == 0:
+            break
+        n = s
+    b.reverse()
+    res = ''
+    for i in b:
+        res += str(a[i])
+    return res
+
+def complete_median(value, n):
+    '''位数补全, 补前置0'''
+    v = str(value)
+    if len(v) >= n:
+        return value
+    for i in range(n-len(v)):
+        v = '0'+ v
+    return v
+
 class Node:
     address = '' #地址
     layer = -1 #层级
@@ -6,10 +34,12 @@ class Node:
     locked_bonus = 0 #锁仓分红
     team_bonus = 0 # 团队分红
     referrer = '' #推荐人
+    referrals = 0 # 直推人数量
     days = 0 #锁仓天数
     status = -1 #节点状态
     next_bonus_time = 0 #下次分红时间
-    team_amount = 0 #团队业绩
+    performance = 0 #团队业绩
+    team_level_info = '' # 团队等级信息，记录各等级数量
 
     children = []  #子节点
 
@@ -33,15 +63,116 @@ class Node:
 
     def can_compute_in_team(self):
         '''是否能够算进团队业绩'''
-        return self.status >= 0 and self.status < self.days
+        return self.status >= 0 and self.status <= self.days
 
-    def compute_team_amount(self):
+    def compute_performance(self):
         '''计算团队锁仓业绩'''
-        team_amount = 0
+        performance = 0
         for node in self.children:
-            team_amount += node.team_amount
+            performance += node.performance
             # 判断子节点能否算进团队业绩
             if node.can_compute_in_team():
-                team_amount += node.locked_amount
-        self.team_amount = team_amount
-        return team_amount
+                performance += node.locked_amount
+        self.performance = performance
+        return performance
+
+    def compute_referrals(self):
+        '''计算直推人数量'''
+        referrals = 0
+        for child in self.children:
+            if child.can_compute_in_team():
+                referrals += 1
+        self.referrals = referrals
+        return referrals
+
+    def get_team_level_info(self):
+        '''获得团队各等级数量信息'''
+        level_num_dict = {}
+        for i in range(0, len(self.team_level_info), 4):
+            level_num_dict[i/4+1] = int(self.team_level_info[i:i+4], 18)
+        return level_num_dict
+
+    def set_team_level_info(self, level_num_dict):
+        '''设置团队各等级数量信息'''
+        levels = level_num_dict.keys()
+        sorted(levels)
+        info = ''
+        for level in levels:
+            info += complete_median(dec_to_n(level_num_dict[level], 18), 4)
+        self.team_level_info = info
+        return info
+
+    def compute_team_level(self):
+        '''计算团队等级数量信息'''
+        level_num_dict = {}
+        for i in range(24):
+            level_num_dict[i+1] = 0
+        for child in self.children:
+            d = child.get_team_level_info()
+            for k in d.keys():
+                level_num_dict[k] += d[k]
+            # 子节点是否加进去
+            if child.can_compute_in_team():
+                level_num_dict[child.level] += 1
+        return self.set_team_level_info(level_num_dict)
+
+    def compute_level(self):
+        '''计算节点等级'''
+        level = 0
+        if self.check_performance(3001000) and self.check_team_level(11, 4, 7, 11):
+            level = 12
+        elif self.check_performance(1001000) and self.check_team_level(9, 4, 6, 10):
+            level = 11
+        elif self.check_performance(301000) and self.check_team_level(7, 4, 5, 9):
+            level = 10
+        elif self.check_performance(101000) and self.check_team_level(5, 4, 4, 8):
+            level = 9
+        elif self.check_performance(51000) and self.check_team_level(4, 4, 3, 7):
+            level = 8
+        elif self.check_performance(11000) and self.check_team_level(3, 2, 2, 6):
+            level = 7
+        elif self.check_performance(5000) and self.check_team_level(2, 1, 0, 0):
+            level = 6
+        elif self.check_performance(1000):
+            level = 5
+        elif self.locked_amount == 10000:
+            level = 4
+        elif self.locked_amount == 5000:
+            level = 3
+        elif self.locked_amount == 3000:
+            level = 2
+        elif self.locked_amount == 1000:
+            level = 1
+        else:
+            level = 0
+        self.level = level
+        return level
+
+    def check_performance(self, low, high=0):
+        '''检测业绩范围'''
+        if high == 0:
+            return self.performance >= low
+        return self.performance >= low and self.performance <= high
+
+    def check_team_level(self, referral_num, referral_level, referral_team_num, referral_team_level):
+        '''检测团队等级是否满足对应的条件'''
+        referrals = 0
+        referral_teams = 0
+        for child in self.children:
+            # 判断直推人是否满足等级
+            if child.level >= referral_level:
+                referrals += 1
+            team_level_dict = child.get_team_level_info()
+            f = False
+            for k in team_level_dict.keys():
+                # 判断直推人的旗下是否满足等级要求
+                if k >= referral_team_level and team_level_dict[k] > 0:
+                    f = True
+            if f:
+                referral_teams += 1
+        if referral_team_num == 0:
+            return referrals >= referral_num
+        return referrals >= referral_num and referral_teams >= referral_team_num
+
+
+
