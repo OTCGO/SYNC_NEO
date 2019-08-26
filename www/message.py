@@ -16,5 +16,7 @@ MSG = {
         "WRONG_FEE":        {"code":210,"message":"wrong fee"},
         "INSUFFICIENT_FEE": {"code":211,"message":"insufficient fee"},
 
-        "UNKNOWN_ERROR":    {"code":500,"message":"unknown error"}
+        "UNKNOWN_ERROR":    {"code":500,"message":"unknown error"},
+
+        "NODE_NOT_EXIST":   {"code":600,"message":"node is not exist"},
         }
