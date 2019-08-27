@@ -22,8 +22,11 @@ class Bonus:
             await self.db.update_status('node_bonus', 0)
         node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
         if node_bonus_timepoint == -1:
-            next_day = time.mktime(datetime.fromtimestamp(time.time()+60*60*24+60).date().timetuple())
-            await self.db.update_status('node_bonus_timepoint', next_day)
+            bonus_time = time.time() + C.get_bonus_interval()
+            if C.get_bonus_start_time() != 'now':
+                bonus_time = time.mktime(datetime.fromtimestamp(bonus_time).date().timetuple())+10
+
+            await self.db.update_status('node_bonus_timepoint', bonus_time)
 
     def handle_by_layer(self, nodes, bonus_time, layer):
         '''处理同一层级的所有节点'''
@@ -32,6 +35,7 @@ class Bonus:
             # 计算锁仓分红
             if nodes[i].can_bonus(bonus_time):
                 nodes[i].locked_bonus = self.compute_locked_bonus(nodes[i].locked_amount, nodes[i].days)
+                nodes[i].status += 1
             # 找子节点
             if nodes[i].address in self.node_group.keys():
                 nodes[i].set_children(self.node_group[nodes[i].address])
@@ -47,7 +51,8 @@ class Bonus:
             # 计算节点等级
             nodes[i].compute_level()
 
-            # TODO: 增加分红记录，更新数据到数据库
+            # 增加分红记录、更新节点状态，更新数据到数据库
+            self.db.add_node_bonus(nodes[i], bonus_time)
 
             # 根据推荐人进行分组
             ref = nodes[i].referrer
@@ -87,8 +92,17 @@ class Bonus:
     async def recover_layer(self, layer):
         '''恢复指定的层级节点数据'''
         logger.info("[BONUS] recover {} layer node data...".format(layer))
-        # TODO 恢复数据
-
+        # 恢复数据
+        nodes = await self.db.get_node_for_bonus(layer)
+        group_by_ref = {}
+        for i in range(len(nodes)):
+            # 根据推荐人进行分组
+            ref = nodes[i].referrer
+            if ref in group_by_ref.keys():
+                group_by_ref[ref].append(nodes[i])
+            else:
+                group_by_ref[ref] = [nodes[i]]
+        self.node_group = group_by_ref
 
     async def start(self):
         '''开始执行分红'''
@@ -116,9 +130,12 @@ class Bonus:
                 await self.db.update_status('node_bonus', layer)
                 logger.info("[BONUS] handle {} layer success".format(layer))
 
+            await self.db.update_node_status_exit()
+
             await self.db.update_status('node_bonus', 0)
             await self.db.update_status('node_bonus_timepoint', bonus_time+60*60*24)
             logger.info("[BONUS] handle all layers success")
+            self.node_group = {}
 
 async def run():
     b = Bonus(C.get_mysql_args(), C.get_bonus_conf())

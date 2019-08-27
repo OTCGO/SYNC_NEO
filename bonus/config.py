@@ -43,3 +43,13 @@ class Config:
                 "10000-360": 68.49,
             }
         }
+
+    @staticmethod
+    def get_bonus_interval():
+        '''获取分红的时间间隔，秒为单位'''
+        return int(os.environ.get('BONUS_INTERVAL'))
+
+    @staticmethod
+    def get_bonus_start_time():
+        '''开始分红的时间点，now：现在， 0：明天0点'''
+        return os.environ.get('BONUS_START_TIME')

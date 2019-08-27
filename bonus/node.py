@@ -27,6 +27,7 @@ def complete_median(value, n):
     return v
 
 class Node:
+    id = 0 #节点数据库id
     address = '' #地址
     layer = -1 #层级
     level = 0 #等级
@@ -40,6 +41,8 @@ class Node:
     next_bonus_time = 0 #下次分红时间
     performance = 0 #团队业绩
     team_level_info = '' # 团队等级信息，记录各等级数量
+
+    need_updated = False # 是否需要更新
 
     children = []  #子节点
 
@@ -73,6 +76,8 @@ class Node:
             # 判断子节点能否算进团队业绩
             if node.can_compute_in_team():
                 performance += node.locked_amount
+        if self.performance != performance:
+            self.need_updated = True
         self.performance = performance
         return performance
 
@@ -82,6 +87,8 @@ class Node:
         for child in self.children:
             if child.can_compute_in_team():
                 referrals += 1
+        if self.referrals != referrals:
+            self.need_updated = True
         self.referrals = referrals
         return referrals
 
@@ -99,6 +106,8 @@ class Node:
         info = ''
         for level in levels:
             info += complete_median(dec_to_n(level_num_dict[level], 18), 4)
+        if self.team_level_info != info:
+            self.need_updated = True
         self.team_level_info = info
         return info
 
@@ -145,6 +154,8 @@ class Node:
             level = 1
         else:
             level = 0
+        if self.level != level:
+            self.need_updated = True
         self.level = level
         return level
 
@@ -174,5 +185,9 @@ class Node:
             return referrals >= referral_num
         return referrals >= referral_num and referral_teams >= referral_team_num
 
-
+    def is_need_update(self, bonus_time):
+        ''''是否需要更新数据， 第二个返回值是是否需要更新状态'''
+        if self.next_bonus_time == bonus_time:
+            return True, self.status >= 0 and self.status < self.days
+        return self.need_updated, False
 
