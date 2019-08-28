@@ -116,7 +116,7 @@ class DB:
         return 0
 
     async def get_node_for_bonus(self, layer):
-        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinforeferrals FROM node WHERE layer = %s;" % layer
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals FROM node WHERE layer = %s;" % layer
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
