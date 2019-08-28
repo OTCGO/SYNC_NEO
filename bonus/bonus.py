@@ -41,15 +41,15 @@ class Bonus:
                 nodes[i].set_children(self.node_group[nodes[i].address])
             # 计算团队业绩
             nodes[i].compute_performance()
-            # 团队业绩分红
-            if nodes[i].can_bonus(bonus_time):
-                nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
             # 计算直推人
             nodes[i].compute_referrals()
             # 计算团队各等级数量
             nodes[i].compute_team_level()
             # 计算节点等级
             nodes[i].compute_level()
+            # 团队业绩分红
+            if nodes[i].can_bonus(bonus_time):
+                nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
 
             # 增加分红记录、更新节点状态，更新数据到数据库
             self.db.add_node_bonus(nodes[i], bonus_time)
