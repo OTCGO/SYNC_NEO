@@ -22,7 +22,7 @@ class Bonus:
             await self.db.update_status('node_bonus', 0)
         node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
         if node_bonus_timepoint == -1:
-            bonus_time = time.time() + C.get_bonus_interval()
+            bonus_time = int(time.time()) + C.get_bonus_interval()
             if C.get_bonus_start_time() != 'now':
                 bonus_time = time.mktime(datetime.fromtimestamp(bonus_time).date().timetuple())+10
 
