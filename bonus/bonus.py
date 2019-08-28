@@ -40,10 +40,10 @@ class Bonus:
             if nodes[i].address in self.node_group.keys():
                 nodes[i].set_children(self.node_group[nodes[i].address])
             # 计算团队业绩
-            performance = nodes[i].compute_performance()
+            nodes[i].compute_performance()
             # 团队业绩分红
             if nodes[i].can_bonus(bonus_time):
-                nodes[i].team_bonus = self.compute_team_bonus(nodes[i].level, performance)
+                nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
             # 计算直推人
             nodes[i].compute_referrals()
             # 计算团队各等级数量
@@ -77,11 +77,20 @@ class Bonus:
         '''计算锁仓分红'''
         return self.bonus_conf['locked_bonus']["%s-%s" % (locked_amount, days)]
 
-    def compute_team_bonus(self, node_level, performance):
+    def compute_team_bonus(self, node):
         '''计算团队分红, 保留三位小数'''
-        if node_level < 5:
+        if node.level < 5:
             return 0
-        return round(performance*node_level*0.02/365, 3)
+        team_bonus = 0
+        for child in node.children:
+            performance = child.performance
+            if child.can_compute_in_team():
+                performance += child.locked_amount
+            burn_rate = 1
+            if node.level < child.level: # 烧伤 收益
+                burn_rate = self.bonus_conf['burn_bonus'][node.level-child.level]
+            team_bonus += performance*burn_rate*node.level*0.02/365
+        return round(team_bonus, 3)
 
     def check_next_layer(self, is_max_layer):
         '''检测是否需要先找出下一层级节点，防止程序异常退出再次运行，下一层级节点数据丢失'''
