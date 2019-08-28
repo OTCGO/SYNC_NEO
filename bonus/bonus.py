@@ -142,7 +142,7 @@ class Bonus:
             await self.db.update_node_status_exit()
 
             await self.db.update_status('node_bonus', 0)
-            await self.db.update_status('node_bonus_timepoint', bonus_time+60*60*24)
+            await self.db.update_status('node_bonus_timepoint', bonus_time + C.get_bonus_interval())
             logger.info("[BONUS] handle all layers success")
             self.node_group = {}
 
