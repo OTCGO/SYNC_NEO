@@ -17,25 +17,27 @@ class Bonus:
 
     async def prepare(self):
         await self.db.init_pool()
+        await self.prepare_status(int(time.time()))
+
+    async def prepare_status(self, now):
         node_bonus = await self.db.get_status('node_bonus')
         if node_bonus == -1:
             await self.db.update_status('node_bonus', 0)
         node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
         if node_bonus_timepoint == -1:
-            bonus_time = int(time.time()) + C.get_bonus_interval()
+            bonus_time = now + C.get_bonus_interval()
             if C.get_bonus_start_time() != 'now':
                 bonus_time = time.mktime(datetime.fromtimestamp(bonus_time).date().timetuple())+10
 
             await self.db.update_status('node_bonus_timepoint', bonus_time)
 
-    def handle_by_layer(self, nodes, bonus_time, layer):
+    async def handle_by_layer(self, nodes, bonus_time, layer):
         '''处理同一层级的所有节点'''
         group_by_ref = {}
         for i in range(len(nodes)):
             # 计算锁仓分红
             if nodes[i].can_bonus(bonus_time):
                 nodes[i].locked_bonus = self.compute_locked_bonus(nodes[i].locked_amount, nodes[i].days)
-                nodes[i].status += 1
             # 找子节点
             if nodes[i].address in self.node_group.keys():
                 nodes[i].set_children(self.node_group[nodes[i].address])
@@ -52,7 +54,10 @@ class Bonus:
                 nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
 
             # 增加分红记录、更新节点状态，更新数据到数据库
-            self.db.add_node_bonus(nodes[i], bonus_time)
+            await self.db.add_node_bonus(nodes[i], bonus_time)
+
+            if nodes[i].can_bonus(bonus_time):
+                nodes[i].status += 1
 
             # 根据推荐人进行分组
             ref = nodes[i].referrer
@@ -113,38 +118,44 @@ class Bonus:
                 group_by_ref[ref] = [nodes[i]]
         self.node_group = group_by_ref
 
+    async def bonus(self):
+        '''执行分红'''
+        now = time.time()
+        bonus_time = await self.db.get_status('node_bonus_timepoint')
+        if now < bonus_time:
+            return False
+
+        node_bonus = await self.db.get_status('node_bonus')
+        is_max_layer = False
+        if node_bonus == 0:
+            node_bonus = await self.db.get_max_node_layer()
+            is_max_layer = True
+            logger.info("[BONUS] get max node layer: {}".format(node_bonus))
+
+        for layer in range(node_bonus, 0, -1):
+            if not self.check_next_layer(is_max_layer):
+                await self.recover_layer(layer + 1)
+
+            nodes = await self.db.get_node_for_bonus(layer)
+            await self.handle_by_layer(nodes, bonus_time, layer)
+
+            await self.db.update_status('node_bonus', layer)
+            logger.info("[BONUS] handle {} layer success".format(layer))
+
+        await self.db.update_node_status_exit()
+
+        await self.db.update_status('node_bonus', 0)
+        await self.db.update_status('node_bonus_timepoint', bonus_time + C.get_bonus_interval())
+        logger.info("[BONUS] handle all layers success")
+        self.node_group = {}
+        return True
+
     async def start(self):
         '''开始执行分红'''
         while True:
-            now = time.time()
-            bonus_time = await self.db.get_status('node_bonus_timepoint')
-            if now < bonus_time:
+            f = await self.bonus()
+            if not f:
                 time.sleep(10)
-                continue
-
-            node_bonus = await self.db.get_status('node_bonus')
-            is_max_layer = False
-            if node_bonus == 0:
-                node_bonus = await self.db.get_max_node_layer()
-                is_max_layer = True
-                logger.info("[BONUS] get max node layer: {}".format(node_bonus))
-
-            for layer in range(node_bonus, 0, -1):
-                if not self.check_next_layer(is_max_layer):
-                    await self.recover_layer(layer+1)
-
-                nodes = await self.db.get_node_for_bonus(layer)
-                self.handle_by_layer(nodes, bonus_time, layer)
-
-                await self.db.update_status('node_bonus', layer)
-                logger.info("[BONUS] handle {} layer success".format(layer))
-
-            await self.db.update_node_status_exit()
-
-            await self.db.update_status('node_bonus', 0)
-            await self.db.update_status('node_bonus_timepoint', bonus_time + C.get_bonus_interval())
-            logger.info("[BONUS] handle all layers success")
-            self.node_group = {}
 
 async def run():
     b = Bonus(C.get_mysql_args(), C.get_bonus_conf())

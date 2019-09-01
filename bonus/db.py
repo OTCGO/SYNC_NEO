@@ -139,7 +139,7 @@ class DB:
     async def update_node_status_exit(self):
         '''节点到期，更新节点状态为-2'''
         sql = 'UPDATE node node1, (SELECT id FROM node WHERE status=days) node2 ' \
-              'SET status=-2 ' \
+              'SET status=-2,nextbonustime=0 ' \
               'WHERE node1.id=node2.id;'
         await self.mysql_execute(sql)
 
@@ -191,12 +191,15 @@ class DB:
         update_field['teamlevelinfo'] = node.team_level_info
 
         if up_status:
-            update_field['status'] = node.status
+            update_field['status'] = node.status+1
             update_field['nextbonustime'] = bonus_time + C.get_bonus_interval()
 
         update_fields = []
         for k in update_field:
-            update_fields.append("{}={}".format(k, update_field[k]))
+            if isinstance(update_field[k], str):
+                update_fields.append("{}='{}'".format(k, update_field[k]))
+            else:
+                update_fields.append("{}={}".format(k, update_field[k]))
 
         sql = "UPDATE node SET {} WHERE id = {};".format(','.join(update_fields), node.id)
         await self.mysql_execute(sql)
