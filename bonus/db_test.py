@@ -25,7 +25,7 @@ async def init_db():
         'password': '123456',
         'db':       'sea_test',
         'autocommit':True,
-        'maxsize':256
+        'maxsize':1
     }
     global db
     db = DB(mysql_args)
@@ -42,10 +42,12 @@ def rand_string(n):
     return salt
 
 async def del_all():
-    await db.mysql_execute('delete from status')
-    await db.mysql_execute('delete from node')
-    await db.mysql_execute('delete from node_bonus')
-
+    conn, _ = await db.mysql_execute('delete from status')
+    await db.pool.release(conn)
+    conn, _ = await db.mysql_execute('delete from node')
+    await db.pool.release(conn)
+    conn, _ = await db.mysql_execute('delete from node_bonus')
+    await db.pool.release(conn)
 
 async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level):
     '''插入节点'''
@@ -126,14 +128,12 @@ class TestDB(unittest.TestCase):
         self.assertEqual(1, len(nodes))
         node = nodes[0]
         node.locked_bonus = 1.64
-        node.status += 1
         await db.add_node_bonus(node, now)
 
         ns = await db.get_node_for_bonus(1)
         self.assertEqual(1, len(ns))
         self.assertEqual(1, ns[0].status)
         ns[0].locked_bonus = 1.64
-        ns[0].status += 1
         bt = now + C.get_bonus_interval()
         await db.add_node_bonus(ns[0], bt)
 
@@ -143,6 +143,7 @@ class TestDB(unittest.TestCase):
 def run():
     loop.run_until_complete(init_db())
     loop.run_until_complete(unittest.main())
+    loop.run_until_complete(db.pool.close())
     loop.close()
 
 if __name__ == '__main__':

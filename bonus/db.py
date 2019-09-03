@@ -141,7 +141,9 @@ class DB:
         sql = 'UPDATE node node1, (SELECT id FROM node WHERE status=days) node2 ' \
               'SET status=-2,nextbonustime=0 ' \
               'WHERE node1.id=node2.id;'
-        await self.mysql_execute(sql)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
 
     async def insert_node_bonus(self, address, locked_bonus, team_bonus, amount, total, remain, bonus_time):
         '''插入分红记记录'''
@@ -202,6 +204,8 @@ class DB:
                 update_fields.append("{}={}".format(k, update_field[k]))
 
         sql = "UPDATE node SET {} WHERE id = {};".format(','.join(update_fields), node.id)
-        await self.mysql_execute(sql)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
 
 

@@ -19,7 +19,7 @@ async def init_bonus():
         'password': '123456',
         'db':       'sea_test',
         'autocommit':True,
-        'maxsize':256
+        'maxsize':  1
     }
     global bonus
     bonus = Bonus(mysql_args, Config.get_bonus_conf())
@@ -52,9 +52,12 @@ async def doBonus(times):
             i += 1
 
 async def del_all():
-    await bonus.db.mysql_execute('delete from node')
-    await bonus.db.mysql_execute('delete from node_bonus')
-    await bonus.db.mysql_execute("delete from status;")
+    conn, _ = await bonus.db.mysql_execute('delete from node')
+    await bonus.db.pool.release(conn)
+    conn,_ = await bonus.db.mysql_execute('delete from node_bonus')
+    await bonus.db.pool.release(conn)
+    conn, _ = await bonus.db.mysql_execute("delete from status;")
+    await bonus.db.pool.release(conn)
 
 class TestBonus(unittest.TestCase):
     @async_test
@@ -65,8 +68,35 @@ class TestBonus(unittest.TestCase):
     async def test_one_node(self):
         now = int(time.time())
         await bonus.prepare_status(now)
-        await insert_node(rand_string(34), 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
+        address = rand_string(34)
+        await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
         await doBonus(31)
+
+        b = await bonus.db.get_lastest_node_bonus(address)
+        expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
+        self.assertEqual(expect_bonus, round(float(b['total']), 3))
+        self.assertEqual(expect_bonus, round(float(b['remain']), 3))
+
+    @async_test
+    async def test_two_nodes(self):
+        now = int(time.time())
+        await bonus.prepare_status(now)
+        address = rand_string(34)
+        await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
+        address2 = rand_string(34)
+        await insert_node(address2, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
+
+        await doBonus(31)
+
+        b = await bonus.db.get_lastest_node_bonus(address)
+        expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
+        self.assertEqual(expect_bonus, round(float(b['total']), 3))
+        self.assertEqual(expect_bonus, round(float(b['remain']), 3))
+
+        b = await bonus.db.get_lastest_node_bonus(address2)
+        expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
+        self.assertEqual(expect_bonus, round(float(b['total']), 3))
+        self.assertEqual(expect_bonus, round(float(b['remain']), 3))
 
 def run():
     loop.run_until_complete(init_bonus())
