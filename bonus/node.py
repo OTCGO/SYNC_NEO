@@ -171,16 +171,17 @@ class Node:
         referral_teams = 0
         for child in self.children:
             # 判断直推人是否满足等级
-            if child.level >= referral_level:
+            if child.can_compute_in_team() and child.level >= referral_level:
                 referrals += 1
-            team_level_dict = child.get_team_level_info()
-            f = False
-            for k in team_level_dict.keys():
-                # 判断直推人的旗下是否满足等级要求
-                if k >= referral_team_level and team_level_dict[k] > 0:
-                    f = True
-            if f:
-                referral_teams += 1
+                team_level_dict = child.get_team_level_info()
+                f = False
+                for k in team_level_dict.keys():
+                    # 判断直推人的旗下是否满足等级要求
+                    if k >= referral_team_level and team_level_dict[k] > 0:
+                        f = True
+                        break
+                if f:
+                    referral_teams += 1
         if referral_team_num == 0:
             return referrals >= referral_num
         return referrals >= referral_num and referral_teams >= referral_team_num

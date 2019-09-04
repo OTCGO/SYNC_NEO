@@ -125,6 +125,7 @@ class TestNode(unittest.TestCase):
         children = []
         node1 = Node()
         node1.level = 5
+        node1.status = 0
         team_level_dict = get_zero_team_level_dict()
         team_level_dict[1] = 1
         team_level_dict[3] = 3
@@ -134,6 +135,7 @@ class TestNode(unittest.TestCase):
 
         node2 = Node()
         node2.level = 4
+        node2.status = 0
         team_level_dict = get_zero_team_level_dict()
         team_level_dict[1] = 2
         team_level_dict[2] = 3
