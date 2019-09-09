@@ -44,6 +44,10 @@ class Node:
 
     need_updated = False # 是否需要更新
 
+    bonus_advance_table = {} #记录推荐人为各等级时的静态收益分类
+
+    area_advance_tabel = {} #大小区表
+
     children = []  #子节点
 
     def set_children(self, children):
@@ -192,3 +196,127 @@ class Node:
             return True, self.status >= 0 and self.status < self.days
         return self.need_updated, False
 
+    def compute_advance_bonus_table(self):
+        '''计算提前静态收益表'''
+        locked_bonus = 0
+        if self.can_compute_in_team():
+            locked_bonus = self.locked_bonus
+
+        def sum_from_children(level):
+            all = {
+                'high_level': 0,
+                "equal_level": 0,
+                "low_one": 0,
+                "normal": 0
+            }
+            for child in self.children:
+                one = child.bonus_advance_table[level]
+                all['high_level'] += one['high_level']
+                all['equal_level'] += one['equal_level']
+                all['low_one'] += one['low_one']
+                all['normal'] += one['normal']
+            return all
+
+        bonus_advance_table = {}
+        for l in range(1, 25):
+            item = {
+                'high_level': 0,
+                "equal_level": 0,
+                "low_one": 0,
+                "normal": 0
+            }
+            info_from_child = sum_from_children(l)
+            if not self.can_compute_in_team():
+                bonus_advance_table[l] = info_from_child
+                continue
+            if l < self.level:  #越级
+                item['high_level'] += info_from_child['high_level']
+                item['high_level'] += info_from_child['equal_level']
+                item['high_level'] += info_from_child['low_one']
+                item['high_level'] += info_from_child['normal']
+                item['high_level'] += locked_bonus
+            elif l == self.level: #平级
+                item['high_level'] += info_from_child['high_level']
+                item['equal_level'] += info_from_child['equal_level']
+                item['equal_level'] += info_from_child['low_one']
+                item['equal_level'] += info_from_child['normal']
+                item['equal_level'] += locked_bonus
+            elif l == self.level + 1:#低一级
+                item['high_level'] += info_from_child['high_level']
+                item['equal_level'] += info_from_child['equal_level']
+                item['low_one'] += info_from_child['low_one']
+                item['low_one'] += info_from_child['normal']
+                item['low_one'] += locked_bonus
+            else: #正常
+                item['high_level'] += info_from_child['high_level']
+                item['equal_level'] += info_from_child['equal_level']
+                item['low_one'] += info_from_child['low_one']
+                item['normal'] += info_from_child['normal']
+                item['normal'] += locked_bonus
+            bonus_advance_table[l] = item
+        self.bonus_advance_table = bonus_advance_table
+
+    def compute_dynamic_bonus_cate(self):
+        '''计算动态的收益分类'''
+        all = {
+            'high_level': 0,
+            "equal_level": 0,
+            "low_one": 0,
+            "normal": 0
+        }
+        for child in self.children:
+            one = child.bonus_advance_table[self.level]
+            all['high_level'] += one['high_level']
+            all['equal_level'] += one['equal_level']
+            all['low_one'] += one['low_one']
+            all['normal'] += one['normal']
+        return all
+
+    def compute_area_advance_tabel(self):
+        '''计算大小区表'''
+        locked_amount = 0
+        if self.can_compute_in_team():
+            locked_amount = self.locked_amount
+
+        def sum_from_children(level):
+            all = {
+                'small': 0,
+                "big": []
+            }
+            for child in self.children:
+                info = child.area_advance_tabel[level]
+                all['small'] += info['small']
+                all['big'].extend(info['big'])
+            return all
+
+        area_advance_tabel = {}
+        for l in range(1, 25):
+            info_from_child = sum_from_children(l)
+            if not self.can_compute_in_team():
+                area_advance_tabel[l] = info_from_child
+                continue
+
+            item = {
+                'small': 0,
+                "big": []
+            }
+            if l == self.level + 1: #大区
+                item['big'].append(sum(info_from_child['big'], info_from_child['small']+locked_amount))
+            else: #小区
+                item['small'] = info_from_child['small'] + locked_amount
+                item['big'] = info_from_child['big']
+            area_advance_tabel[l] = item
+        self.area_advance_tabel = area_advance_tabel
+
+    def compute_big_small_area(self):
+        '''计算大小区'''
+        all = {
+            'small': 0,
+            "big": []
+        }
+        for child in self.children:
+            info = child.area_advance_tabel[self.level]
+            all['small'] += info['small']
+            all['big'].extend(info['big'])
+
+        return all
