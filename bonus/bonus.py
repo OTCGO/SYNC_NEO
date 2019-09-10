@@ -45,13 +45,20 @@ class Bonus:
             nodes[i].compute_performance()
             # 计算直推人
             nodes[i].compute_referrals()
+            # 计算直推分红
+            nodes[i].referrals_bonus = self.compute_referrals_bonus(nodes[i])
             # 计算团队各等级数量
             nodes[i].compute_team_level()
             # 计算节点等级
             nodes[i].compute_level()
             # 团队业绩分红
             if nodes[i].can_bonus(bonus_time):
-                nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
+                burned, small_area_burned, nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
+                nodes[i].burned = 1 if burned else 0
+                nodes[i].small_area_burned = 1 if small_area_burned else 0
+
+            nodes[i].compute_advance_bonus_table()
+            nodes[i].compute_area_advance_tabel()
 
             # 增加分红记录、更新节点状态，更新数据到数据库
             await self.db.add_node_bonus(nodes[i], bonus_time)
@@ -82,20 +89,35 @@ class Bonus:
         '''计算锁仓分红'''
         return self.bonus_conf['locked_bonus']["%s-%s" % (locked_amount, days)]
 
+    def compute_referrals_bonus(self, node):
+        '''计算直推分红'''
+        bonus = 0
+        for child in node.children:
+            if not child.can_compute_in_team():
+                continue
+            bonus += 0.2*self.compute_locked_bonus(child.locked_amount, child.days)
+        return round(bonus, 3)
+
     def compute_team_bonus(self, node):
         '''计算团队分红, 保留三位小数'''
         if node.level < 5:
             return 0
         team_bonus = 0
-        for child in node.children:
-            performance = child.performance
-            if child.can_compute_in_team():
-                performance += child.locked_amount
-            burn_rate = 1
-            if node.level < child.level: # 烧伤 收益
-                burn_rate = self.bonus_conf['burn_bonus'][node.level-child.level]
-            team_bonus += performance*burn_rate*node.level*0.02/365
-        return round(team_bonus, 3)
+        small_area_burned = False #小区烧伤
+        big_small_area = node.compute_big_small_area()
+        if len(big_small_area['big']) > 0 and big_small_area['small'] > min(big_small_area['big'])*0.5:
+            small_area_burned = True
+
+        burned = False
+        info = node.compute_dynamic_bonus_cate()
+        for k in info:
+            if k in ['high_level', 'equal_level', 'low_one'] and info[k] > 0:
+                burned = True
+            if small_area_burned and k == 'normal':
+                team_bonus += info[k] * (1-self.bonus_conf['level_burned_bonus'][k]) * (1-self.bonus_conf['small_area_burned_bonus'])
+            else:
+                team_bonus += info[k] * (1-self.bonus_conf['level_burned_bonus'][k])
+        return burned, small_area_burned, round(team_bonus*self.bonus_conf['team_bonus_rate'][node.level], 3)
 
     def check_next_layer(self, is_max_layer):
         '''检测是否需要先找出下一层级节点，防止程序异常退出再次运行，下一层级节点数据丢失'''

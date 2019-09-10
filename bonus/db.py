@@ -3,7 +3,7 @@ import aiomysql
 from logzero import logger
 import sys
 
-from node import Node
+from node import Node, decode_advance_area_table, decode_advance_bonus_table
 from config import Config as C
 
 class DB:
@@ -116,7 +116,7 @@ class DB:
         return 0
 
     async def get_node_for_bonus(self, layer):
-        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals FROM node WHERE layer = %s;" % layer
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned FROM node WHERE layer = %s;" % layer
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
@@ -133,6 +133,11 @@ class DB:
             node.performance = r[9]
             node.team_level_info = r[10]
             node.referrals = r[11]
+            node.bonus_advance_table_encode = r[12]
+            node.area_advance_tabel_encode = r[13]
+            node.burned = r[14]
+            node.bonus_advance_table = decode_advance_bonus_table(node.bonus_advance_table_encode)
+            node.area_advance_tabel = decode_advance_area_table(node.area_advance_tabel_encode)
             nodes.append(node)
         return nodes
 
@@ -145,10 +150,10 @@ class DB:
         if conn:
             await self.pool.release(conn)
 
-    async def insert_node_bonus(self, address, locked_bonus, team_bonus, amount, total, remain, bonus_time):
+    async def insert_node_bonus(self, address, locked_bonus, referrals_bonus, team_bonus, amount, total, remain, bonus_time):
         '''插入分红记记录'''
         sql = 'INSERT INTO node_bonus(address,lockedbonus,teambonus,amount,total,remain,bonustime,referralsbonus) ' \
-              'VALUES("{}","{}","{}","{}","{}","{}",{},"{}");'.format(address, locked_bonus, team_bonus, amount, total, remain, bonus_time, 0)
+              'VALUES("{}","{}","{}","{}","{}","{}",{},"{}");'.format(address, locked_bonus, team_bonus, amount, total, remain, bonus_time, referrals_bonus)
         await self.mysql_insert_one(sql)
 
     async def get_lastest_node_bonus(self, address):
@@ -165,7 +170,7 @@ class DB:
     async def add_node_bonus(self, node, bonus_time):
         '''增加分红记录，并更新节点状态'''
         if node.can_bonus(bonus_time): #增加分红记录
-            amount = node.locked_bonus + node.team_bonus
+            amount = node.locked_bonus + node.team_bonus + node.referrals_bonus
             total, remain = amount, amount
             # 先找出最新的分红记录
             prev_bonus_record = await self.get_lastest_node_bonus(node.address)
@@ -179,7 +184,7 @@ class DB:
                     logger.warning("you are going to add bonus for bonus_time({}), but prev bonus_time({}) is not the right time".format(bonus_time, prev_bonus_record['bonus_time']))
 
             if add:
-                await self.insert_node_bonus(node.address, node.locked_bonus, node.team_bonus,
+                await self.insert_node_bonus(node.address, node.locked_bonus, node.referrals_bonus, node.team_bonus,
                     amount, total, remain, bonus_time)
 
         update, up_status = node.is_need_update(bonus_time)
@@ -191,6 +196,9 @@ class DB:
         update_field['referrals'] = node.referrals
         update_field['performance'] = node.performance
         update_field['teamlevelinfo'] = node.team_level_info
+        update_field['bonusadvancetable'] = node.bonus_advance_table_encode
+        update_field['areaadvancetable'] = node.area_advance_tabel_encode
+        update_field['burned'] = node.burned
 
         if up_status:
             update_field['status'] = node.status+1

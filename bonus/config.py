@@ -42,8 +42,19 @@ class Config:
                 "10000-180": 49.31,
                 "10000-360": 68.49,
             },
-            "burn_bonus": {
-                "-1": 0.6
+            "level_burned_bonus": {
+                "high_level": 1,
+                "equal_level": 0.95,
+                "low_one": 0.9,
+                "normal": 0
+            },
+            "small_area_burned_bonus": 0.8,
+            "team_bonus_rate": {
+                5: 0.03,
+                6: 0.2,
+                7: 0.3,
+                8: 0.4,
+                9: 0.5
             }
         }
 

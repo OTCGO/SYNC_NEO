@@ -1,7 +1,7 @@
 import unittest
 import time
 
-from node import Node
+from node import Node, encode_advance_bonus_table, decode_advance_bonus_table,encode_advance_area_table, decode_advance_area_table
 
 def get_zero_team_level_dict():
     d = {}
@@ -145,10 +145,10 @@ class TestNode(unittest.TestCase):
 
         parent = Node()
         parent.set_children(children)
-        assert parent.check_team_level(2, 1, 0, 0)
-        assert parent.check_team_level(2, 4, 2, 3)
-        assert not parent.check_team_level(3, 1, 0, 0)
-        assert not parent.check_team_level(2, 5, 0, 0)
+        assert parent.check_team_level(2, 1)
+        assert parent.check_team_level(2, 4)
+        assert not parent.check_team_level(3, 1)
+        assert not parent.check_team_level(2, 5)
 
     def test_compute_advance_bonus_table(self):
         '''测试计算等级分红表'''
@@ -424,3 +424,25 @@ class TestNode(unittest.TestCase):
         check_big_small_area(n9, [1], 5)
         check_big_small_area(n10, [], 2)
         check_big_small_area(n11, [3, 3], 3)
+
+    def test_encode_advance_bonus_table(self):
+        bonus_advance_table = {}
+        for i in range(1, 25):
+            bonus_advance_table[i] = {
+                'high_level': 0,
+                "equal_level": 0,
+                "low_one": 0,
+                "normal": 1
+            }
+        s = encode_advance_bonus_table(bonus_advance_table)
+        self.assertDictEqual(bonus_advance_table, decode_advance_bonus_table(s))
+
+    def test_encode_advance_area_table(self):
+        area_advance_tabel = {}
+        for i in range(1, 25):
+            area_advance_tabel[i] = {
+                'small': 2,
+                "big": [1]
+            }
+        s = encode_advance_area_table(area_advance_tabel)
+        self.assertDictEqual(area_advance_tabel, decode_advance_area_table(s))

@@ -1,3 +1,4 @@
+import json
 
 def dec_to_n(n,x):
     '''十进制转为N进制'''
@@ -26,6 +27,61 @@ def complete_median(value, n):
         v = '0'+ v
     return v
 
+def encode_advance_bonus_table(table):
+    ''''''
+    keys = table.keys()
+    sorted(keys)
+    items = []
+    for k in keys:
+        info = table[k]
+        item = []
+        item.append(info['high_level'])
+        item.append(info['equal_level'])
+        item.append(info['low_one'])
+        item.append(info['normal'])
+        items.append(item)
+    return json.dumps(items)
+
+def decode_advance_bonus_table(s):
+    ''''''
+    items = json.loads(s)
+    table = {}
+    for i in range(len(items)):
+        item = items[i]
+        info = {
+            'high_level': item[0],
+            "equal_level": item[1],
+            "low_one": item[2],
+            "normal": item[3]
+        }
+        table[i+1] = info
+    return table
+
+def encode_advance_area_table(table):
+    ''''''
+    keys = table.keys()
+    sorted(keys)
+    items = []
+    for k in keys:
+        info = table[k]
+        item = []
+        item.append(info['big'])
+        item.append(info['small'])
+        items.append(item)
+    return json.dumps(items)
+
+def decode_advance_area_table(s):
+    items = json.loads(s)
+    table = {}
+    for i in range(len(items)):
+        item = items[i]
+        info = {
+            'big': item[0],
+            "small": item[1],
+        }
+        table[i+1] = info
+    return table
+
 class Node:
     id = 0 #节点数据库id
     address = '' #地址
@@ -34,6 +90,7 @@ class Node:
     locked_amount = 0 #锁仓数量
     locked_bonus = 0 #锁仓分红
     team_bonus = 0 # 团队分红
+    referrals_bonus = 0 #直推分红
     referrer = '' #推荐人
     referrals = 0 # 直推人数量
     days = 0 #锁仓天数
@@ -41,12 +98,16 @@ class Node:
     next_bonus_time = 0 #下次分红时间
     performance = 0 #团队业绩
     team_level_info = '' # 团队等级信息，记录各等级数量
+    burned = 0 #是否烧伤
+    small_area_burned = 0 #小区烧伤
 
     need_updated = False # 是否需要更新
 
     bonus_advance_table = {} #记录推荐人为各等级时的静态收益分类
+    bonus_advance_table_encode = ''
 
     area_advance_tabel = {} #大小区表
+    area_advance_tabel_encode = ''
 
     children = []  #子节点
 
@@ -132,21 +193,15 @@ class Node:
     def compute_level(self):
         '''计算节点等级'''
         level = 0
-        if self.check_performance(3001000) and self.check_team_level(11, 4, 7, 11):
-            level = 12
-        elif self.check_performance(1001000) and self.check_team_level(9, 4, 6, 10):
-            level = 11
-        elif self.check_performance(301000) and self.check_team_level(7, 4, 5, 9):
-            level = 10
-        elif self.check_performance(101000) and self.check_team_level(5, 4, 4, 8):
+        if self.check_performance(3500000) and self.check_team_level(3, 8):
             level = 9
-        elif self.check_performance(51000) and self.check_team_level(4, 4, 3, 7):
+        elif self.check_performance(1000000) and self.check_team_level(3, 7):
             level = 8
-        elif self.check_performance(11000) and self.check_team_level(3, 2, 2, 6):
+        elif self.check_performance(300000) and self.check_team_level(3, 6):
             level = 7
-        elif self.check_performance(5000) and self.check_team_level(2, 1, 0, 0):
+        elif self.check_performance(80000) and self.check_team_level(3, 5):
             level = 6
-        elif self.check_performance(1000):
+        elif self.check_performance(20000):
             level = 5
         elif self.locked_amount == 10000:
             level = 4
@@ -169,26 +224,23 @@ class Node:
             return self.performance >= low
         return self.performance >= low and self.performance <= high
 
-    def check_team_level(self, referral_num, referral_level, referral_team_num, referral_team_level):
+    def check_team_level(self, num, lowest_level):
         '''检测团队等级是否满足对应的条件'''
-        referrals = 0
-        referral_teams = 0
+        actual = 0
         for child in self.children:
             # 判断直推人是否满足等级
-            if child.can_compute_in_team() and child.level >= referral_level:
-                referrals += 1
-                team_level_dict = child.get_team_level_info()
-                f = False
-                for k in team_level_dict.keys():
-                    # 判断直推人的旗下是否满足等级要求
-                    if k >= referral_team_level and team_level_dict[k] > 0:
-                        f = True
-                        break
-                if f:
-                    referral_teams += 1
-        if referral_team_num == 0:
-            return referrals >= referral_num
-        return referrals >= referral_num and referral_teams >= referral_team_num
+            f = False
+            if child.can_compute_in_team() and child.level >= lowest_level:
+                f = True
+            team_level_dict = child.get_team_level_info()
+            for k in team_level_dict.keys():
+                # 判断直推人的旗下是否满足等级要求
+                if k >= lowest_level and team_level_dict[k] > 0:
+                    f = True
+                    break
+            if f:
+                actual += 1
+        return actual >= num
 
     def is_need_update(self, bonus_time):
         ''''是否需要更新数据， 第二个返回值是是否需要更新状态'''
@@ -255,6 +307,10 @@ class Node:
                 item['normal'] += locked_bonus
             bonus_advance_table[l] = item
         self.bonus_advance_table = bonus_advance_table
+        encode = encode_advance_bonus_table(self.bonus_advance_table)
+        if encode != self.bonus_advance_table_encode:
+            self.bonus_advance_table_encode = encode
+            self.need_updated = True
 
     def compute_dynamic_bonus_cate(self):
         '''计算动态的收益分类'''
@@ -307,6 +363,10 @@ class Node:
                 item['big'] = info_from_child['big']
             area_advance_tabel[l] = item
         self.area_advance_tabel = area_advance_tabel
+        encode = encode_advance_area_table(self.area_advance_tabel)
+        if encode != self.bonus_advance_table_encode:
+            self.bonus_advance_table_encode = encode
+            self.need_updated = True
 
     def compute_big_small_area(self):
         '''计算大小区'''
