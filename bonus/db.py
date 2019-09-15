@@ -108,6 +108,24 @@ class DB:
         sql = "INSERT INTO status(name,update_height) VALUES ('%s',%s) ON DUPLICATE KEY UPDATE update_height=%s;" % (name,height,height)
         await self.mysql_insert_one(sql)
 
+    async def insert_node(self, node_dict):
+        '''插入节点'''
+        fields = []
+        values = []
+        update_fields = []
+        for k in node_dict:
+            fields.append(k)
+            if isinstance(node_dict[k], str):
+                values.append("'{}'".format(node_dict[k]))
+                if k != 'address':
+                    update_fields.append("{}='{}'".format(k, node_dict[k]))
+            else:
+                values.append("{}".format(node_dict[k]))
+                update_fields.append("{}={}".format(k, node_dict[k]))
+
+        sql = "INSERT INTO node({}) VALUES ({}) ON DUPLICATE KEY UPDATE {};".format(fields, values, update_fields)
+        await self.mysql_insert_one(sql)
+
     async def get_max_node_layer(self):
         sql = 'SElECT max(layer) FROM node;'
         r = await self.mysql_query_one(sql)
@@ -141,11 +159,81 @@ class DB:
             nodes.append(node)
         return nodes
 
+    async def get_node_by_address(self, address):
+        '''根据地址查询节点'''
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned FROM node WHERE address = '%s';" % address
+        results = await self.mysql_query_many(sql)
+        for r in results:
+            node = Node()
+            node.id = r[0]
+            node.status = r[1]
+            node.referrer = r[2]
+            node.address = r[3]
+            node.locked_amount = r[4]
+            node.days = r[5]
+            node.layer = r[6]
+            node.next_bonus_time = r[7]
+            node.level = r[8]
+            node.performance = r[9]
+            node.team_level_info = r[10]
+            node.referrals = r[11]
+            node.bonus_advance_table_encode = r[12]
+            node.area_advance_tabel_encode = r[13]
+            node.burned = r[14]
+            node.bonus_advance_table = decode_advance_bonus_table(node.bonus_advance_table_encode)
+            node.area_advance_tabel = decode_advance_area_table(node.area_advance_tabel_encode)
+            return node
+        return None
+
     async def update_node_status_exit(self):
         '''节点到期，更新节点状态为-2'''
         sql = 'UPDATE node node1, (SELECT id FROM node WHERE status=days) node2 ' \
               'SET status=-2,nextbonustime=0 ' \
               'WHERE node1.id=node2.id;'
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
+
+    async def get_nodes_by_status(self, status):
+        '''根据状态查出节点'''
+        sql = "SELECT id,txid FROM node WHERE status = %s;" % status
+        results = await self.mysql_query_many(sql)
+        nodes = []
+        for r in results:
+            node = {}
+            node['id'] = r[0]
+            node['txid'] = r[1]
+            nodes.append(node)
+        return nodes
+
+    async def update_node_by_id(self, node_dict):
+        '''更新节点数据'''
+        update_fields = []
+        for k in node_dict:
+            if k == 'id':
+                continue
+            if isinstance(node_dict[k], str):
+                update_fields.append("{}='{}'".format(k, node_dict[k]))
+            else:
+                update_fields.append("{}={}".format(k, node_dict[k]))
+
+        sql = "UPDATE node SET {} WHERE id = {};".format(','.join(update_fields), node_dict['id'])
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
+
+    async def update_node_by_address(self, node_dict):
+        '''更新节点数据'''
+        update_fields = []
+        for k in node_dict:
+            if k == 'id':
+                continue
+            if isinstance(node_dict[k], str):
+                update_fields.append("{}='{}'".format(k, node_dict[k]))
+            else:
+                update_fields.append("{}={}".format(k, node_dict[k]))
+
+        sql = "UPDATE node SET {} WHERE address = '{}';".format(','.join(update_fields), node_dict['address'])
         conn, _ = await self.mysql_execute(sql)
         if conn:
             await self.pool.release(conn)
@@ -158,14 +246,31 @@ class DB:
 
     async def get_lastest_node_bonus(self, address):
         '''获得节点最新分红记录'''
-        sql = 'SELECT total,remain,bonustime FROM node_bonus WHERE address="{}" ORDER BY bonustime DESC LIMIT 1;'.format(address)
+        sql = 'SELECT total,remain,bonustime,id FROM node_bonus WHERE address="{}" ORDER BY bonustime DESC LIMIT 1;'.format(address)
         r = await self.mysql_query_one(sql)
         b = {}
         if r:
             b['total'] = r[0]
             b['remain'] = r[1]
             b['bonus_time'] = r[2]
+            b['id'] = r[3]
         return b
+
+    async def update_node_bonus_by_id(self, node_bonus):
+        '''更新节点收益表'''
+        update_fields = []
+        for k in node_bonus:
+            if k == 'id':
+                continue
+            if isinstance(node_bonus[k], str):
+                update_fields.append("{}='{}'".format(k, node_bonus[k]))
+            else:
+                update_fields.append("{}={}".format(k, node_bonus[k]))
+
+        sql = "UPDATE node_bonus SET {} WHERE id = {};".format(','.join(update_fields), node_bonus['id'])
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
 
     async def add_node_bonus(self, node, bonus_time):
         '''增加分红记录，并更新节点状态'''
@@ -216,4 +321,34 @@ class DB:
         if conn:
             await self.pool.release(conn)
 
+    async def get_node_updates(self):
+        '''获得节点的更新数据'''
+        sql = "SELECT id,address,operation,referrer,amount,days,penalty,txid FROM node_update;"
+        results = await self.mysql_query_many(sql)
+        updates = []
+        for r in results:
+            update = {}
+            update['id'] = r[0]
+            update['address'] = r[1]
+            update['operation'] = r[2]
+            update['referrer'] = r[3]
+            update['amount'] = r[4]
+            update['days'] = r[5]
+            update['penalty'] = r[6]
+            update['txid'] = r[7]
+            updates.append(update)
+        return updates
 
+    async def del_node_update(self, id):
+        '''删除用户节点更新记录'''
+        sql = "DELETE FROM node_update WHERE id = {};".format(id)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
+
+    async def insert_node_withdraw(self, node_withdraw):
+        '''插入收益提取记录'''
+        sql = 'INSERT INTO node_withdraw(address,txid,amount,timepoint,status) ' \
+              'VALUES("{}","{}","{}",{},{});'.format(node_withdraw['address'], node_withdraw['txid'],
+                        node_withdraw['amount'], node_withdraw['timepoint'], node_withdraw['status'])
+        await self.mysql_insert_one(sql)

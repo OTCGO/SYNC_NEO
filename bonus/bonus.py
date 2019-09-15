@@ -5,6 +5,7 @@ from logzero import logger
 
 from db import DB
 from config import Config as C
+from node import Node, encode_advance_area_table, encode_advance_bonus_table
 
 class Bonus:
     #节点分组，key为推荐人，value为节点数组
@@ -172,11 +173,87 @@ class Bonus:
         self.node_group = {}
         return True
 
+    async def handle_unconfirmed_node_tx(self):
+        '''处理未确认的节点交易'''
+        nodes = await self.db.get_nodes_by_status(-1)
+        logger.info('[NODE] handle {} unconfirmed nodes.'.format(len(nodes)))
+        for node in nodes:
+            ok = await self.check_tx_confirmed(node['txid'])
+            if ok:
+                await self.db.update_node_by_id({'id': node['id'], 'status': 0})
+
+    async def check_tx_confirmed(self, txid):
+        '''交易tx是否已确认'''
+        #TODO:
+
+    async def handle_node_updates(self):
+        '''处理用户的节点更新'''
+        updates = await self.db.get_node_updates()
+        logger.info('[NODE] handle {} node updates.'.format(len(updates)))
+        for up in updates:
+            op = up['operation']
+            if op == 1: #新节点
+                #找出推荐人
+                referrer_node = await self.db.get_node_by_address(up['referrer'])
+                if not referrer_node:
+                    logger.warning("[NODE] add node for address({}), but referrer({}) not found.".format(up['address'], up['referrer']))
+                else:
+                    node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
+                    node = {
+                        'address': up['address'],
+                        'referrer': up['referrer'],
+                        'amount': int(up['amount']),
+                        'days': up['days'],
+                        'txid': up['txid'],
+                        'status': -1,
+                        'signin': 0,
+                        'nextbonustime': node_bonus_timepoint+2*C.get_bonus_interval(),
+                        'layer': referrer_node.layer+1,
+                        'bonusadvancetable': encode_advance_bonus_table(Node.zero_advance_bonus_table()),
+                        'areaadvancetable': encode_advance_area_table(Node.zero_advance_area_table())
+                    }
+                    await self.db.insert_node(node)
+            elif op == 2: #解锁
+                await self.db.update_node_by_address({'address': up['address'], 'status': -5})
+            elif op == 3: #提取
+                await self.withdraw_bonus(up['address'], up['amount'])
+            elif op == 4: #签到
+                await self.db.update_node_by_address({'address': up['address'], 'signin': 1})
+            else:
+                logger.error('[NODE] wrong operation: {}'.format(op))
+            await self.db.del_node_update(up['id'])
+
+    async def withdraw_bonus(self, address, amount):
+        '''提取分红'''
+        last = await self.db.get_lastest_node_bonus(address)
+        if not last:
+            logger.warning("[WITHDRAW] no any node_bonus for address: {}".format(address))
+            return
+        remain = float(last['remain'])
+        remain = (remain-float(amount)) if remain > float(amount) else 0
+        node_bonus  = {
+            "id": last['id'],
+            "remain": str(remain)
+        }
+        #更新分红表
+        await self.db.update_node_bonus_by_id(node_bonus)
+        node_withdraw = {
+            'address': address,
+            'txid': '',
+            'amount': amount,
+            'timepoint': int(time.time()),
+            'status': 0
+        }
+        #增加收益记录
+        await self.db.insert_node_withdraw(node_withdraw)
+
     async def start(self):
-        '''开始执行分红'''
+        '''开始执行'''
         while True:
             f = await self.bonus()
             if not f:
+                await self.handle_unconfirmed_node_tx()
+                await self.handle_node_updates()
                 time.sleep(10)
 
 async def run():

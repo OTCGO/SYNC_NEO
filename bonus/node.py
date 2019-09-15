@@ -380,3 +380,27 @@ class Node:
             all['big'].extend(info['big'])
 
         return all
+
+    @staticmethod
+    def zero_advance_bonus_table():
+        '''空的分红计算表'''
+        table = {}
+        for i in range(1, 25):
+            table[i] = {
+                'high_level': 0,
+                "equal_level": 0,
+                "low_one": 0,
+                "normal": 0
+            }
+        return table
+
+    @staticmethod
+    def zero_advance_area_table():
+        '''空的区计算表'''
+        table = {}
+        for i in range(1, 25):
+            table[i] = {
+                'small': 0,
+                "big": []
+            }
+        return table
