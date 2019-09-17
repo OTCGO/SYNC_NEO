@@ -91,6 +91,7 @@ class Node:
     locked_bonus = 0 #锁仓分红
     team_bonus = 0 # 团队分红
     referrals_bonus = 0 #直推分红
+    signin_bonus = 0 #签到收益
     referrer = '' #推荐人
     referrals = 0 # 直推人数量
     days = 0 #锁仓天数
@@ -100,6 +101,7 @@ class Node:
     team_level_info = '' # 团队等级信息，记录各等级数量
     burned = 0 #是否烧伤
     small_area_burned = 0 #小区烧伤
+    signin = 0 #签到
 
     need_updated = False # 是否需要更新
 

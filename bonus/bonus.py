@@ -39,6 +39,10 @@ class Bonus:
             # 计算锁仓分红
             if nodes[i].can_bonus(bonus_time):
                 nodes[i].locked_bonus = self.compute_locked_bonus(nodes[i].locked_amount, nodes[i].days)
+                #签到收益
+                if nodes[i].signin == 1:
+                    nodes[i].signin_bonus = round(0.1*nodes[i].locked_bonus, 3)
+                    nodes[i].signin = 0
             # 找子节点
             if nodes[i].address in self.node_group.keys():
                 nodes[i].set_children(self.node_group[nodes[i].address])
