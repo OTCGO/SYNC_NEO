@@ -67,3 +67,7 @@ class Config:
     def get_bonus_start_time():
         '''开始分红的时间点，now：现在， 0：明天0点'''
         return os.environ.get('BONUS_START_TIME')
+
+    @staticmethod
+    def get_check_tx_confirmed_url():
+        return os.environ.get('CHECK_TX_CONFIRMED_URL')

@@ -2,6 +2,7 @@ import asyncio
 import time
 from datetime import datetime
 from logzero import logger
+import requests
 
 from db import DB
 from config import Config as C
@@ -10,10 +11,12 @@ from node import Node, encode_advance_area_table, encode_advance_bonus_table
 class Bonus:
     #节点分组，key为推荐人，value为节点数组
     node_group = {}
+    debug = False
 
     def __init__(self, mysql_args, bonus_conf):
         self.db = DB(mysql_args)
         self.bonus_conf = bonus_conf
+        self.debug = False
         pass
 
     async def prepare(self):
@@ -185,10 +188,21 @@ class Bonus:
             ok = await self.check_tx_confirmed(node['txid'])
             if ok:
                 await self.db.update_node_by_id({'id': node['id'], 'status': 0})
+                logger.info('[NODE] confirm tx success for node address({})'.format(node['address']))
 
     async def check_tx_confirmed(self, txid):
         '''交易tx是否已确认'''
-        #TODO:
+        if self.debug:
+            return True
+        try:
+            res = requests.get(C.get_check_tx_confirmed_url().format(txid))
+            data = res.json()
+            if data and not data['error']:
+                return True
+        except Exception as e:
+            logger.error('[NODE] check tx confirmed from super node err: {}'.format(e.args))
+            return False
+        return False
 
     async def handle_node_updates(self):
         '''处理用户的节点更新'''

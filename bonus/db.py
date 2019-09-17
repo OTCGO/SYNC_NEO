@@ -197,13 +197,14 @@ class DB:
 
     async def get_nodes_by_status(self, status):
         '''根据状态查出节点'''
-        sql = "SELECT id,txid FROM node WHERE status = %s;" % status
+        sql = "SELECT id,txid,address FROM node WHERE status = %s;" % status
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
             node = {}
             node['id'] = r[0]
             node['txid'] = r[1]
+            node['address'] = r[2]
             nodes.append(node)
         return nodes
 
