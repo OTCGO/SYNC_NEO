@@ -306,6 +306,7 @@ class DB:
         update_field['areaadvancetable'] = node.area_advance_tabel_encode
         update_field['burned'] = node.burned
         update_field['signin'] = node.signin
+        update_field['smallareaburned'] = node.small_area_burned
 
         if up_status:
             update_field['status'] = node.status+1
