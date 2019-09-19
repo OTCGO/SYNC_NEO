@@ -359,7 +359,7 @@ async def node_details(net, address, request, *, index=0, length=100):
     index, length = info['index'], info['length']
     pool = request.app['pool']
     h = await mysql_get_node_bonus_history(pool, address, index, length)
-    request['result']['data'] = {}
+    request['result']['data'] = {'total':'0','history':[]}
     if h:
         request['result']['data']['total'] = h[0]['total']
         request['result']['data']['history'] = h
