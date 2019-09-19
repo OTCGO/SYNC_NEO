@@ -61,3 +61,11 @@ CREATE TABLE NOT EXISTS node_update (
   timepoint INT UNSIGNED NOT NULL,
   PRIMARY KEY (id)
 );
+
+CREATE TABLE NOT EXISTS node_signature (
+  id INT UNSIGNED AUTO_INCREMENT,
+  address VARCHAR(34) NOT NULL,
+  signature CHAR(128) NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE INDEX uidx_address_signature(address, signature(20))
+);
