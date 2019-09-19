@@ -18,7 +18,10 @@ CREATE TABLE IF NOT EXISTS node (
   penalty INT UNSIGNED DEFAULT 0 NOT NULL,
   refundtxid VARCHAR(64) DEFAULT '' NOT NULL,
   burned TINYINT UNSIGNED DEFAULT 0 NOT NULL, #0未烧伤 1烧伤
+  smallareaburned TINYINT UNSIGNED DEFAULT 0 NOT NULL, #0未烧伤 1烧伤
   signin TINYINT UNSIGNED DEFAULT 0 NOT NULL, #0未签到 1签到
+  bonusadvancetable TEXT,
+  areaadvancetable LONGTEXT,
   PRIMARY KEY (id),
   INDEX idx_referrer_address(referrer, address),
   INDEX idx_layer_nextbonustime_status(layer, nextbonustime, status)
@@ -28,6 +31,7 @@ CREATE TABLE IF NOT EXISTS node_bonus (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) NOT NULL,
   lockedbonus VARCHAR(40) NOT NULL,
+  referralsbonus VARCHAR(40) NOT NULL,
   teambonus VARCHAR(40) NOT NULL,
   signinbonus VARCHAR(40) NOT NULL, #签到奖励
   amount VARCHAR(40) NOT NULL,
