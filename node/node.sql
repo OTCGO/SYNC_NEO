@@ -1,6 +1,6 @@
 USE sea;
 
-CREATE TABLE NOT EXISTS node (
+CREATE TABLE IF NOT EXISTS node (
   id INT UNSIGNED AUTO_INCREMENT,
   txid CHAR(64) UNIQUE NOT NULL,
   status SMALLINT DEFAULT -1 NOT NULL, # -7解锁已确认 -6解锁已退币待确认 -5解锁未退币 -4退出已确认 -3退出已退币待确认 -2退出未退币 -1新节点未确认 0新节点已确认
@@ -24,7 +24,7 @@ CREATE TABLE NOT EXISTS node (
   INDEX idx_layer_nextbonustime_status(layer, nextbonustime, status)
 );
 
-CREATE TABLE NOT EXISTS node_bonus (
+CREATE TABLE IF NOT EXISTS node_bonus (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) NOT NULL,
   lockedbonus VARCHAR(40) NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE NOT EXISTS node_bonus (
   INDEX idx_address_bonustime(address, bonustime)
 );
 
-CREATE TABLE NOT EXISTS node_withdraw (
+CREATE TABLE IF NOT EXISTS node_withdraw (
   id INT UNSIGNED AUTO_INCREMENT,
   txid VARCHAR(64) DEFAULT '' NOT NULL,
   address VARCHAR(34) NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE NOT EXISTS node_withdraw (
   INDEX idx_address_timepoint(address, timepoint)
 );
 
-CREATE TABLE NOT EXISTS node_update (
+CREATE TABLE IF NOT EXISTS node_update (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) UNIQUE NOT NULL,
   operation TINYINT UNSIGNED NOT NULL, #1新节点 2解锁 3提取 4签到
@@ -62,7 +62,7 @@ CREATE TABLE NOT EXISTS node_update (
   PRIMARY KEY (id)
 );
 
-CREATE TABLE NOT EXISTS node_signature (
+CREATE TABLE IF NOT EXISTS node_signature (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) NOT NULL,
   signature CHAR(128) NOT NULL,
