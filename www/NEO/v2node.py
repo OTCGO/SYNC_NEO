@@ -61,7 +61,7 @@ async def mysql_insert_one(pool, sql):
         return num
     except Exception as e:
         logger.error("mysql INSERT failure:{}".format(e))
-        sys.exit(1)
+        return 0
     finally:
         await pool.release(conn)
 
@@ -73,7 +73,7 @@ async def mysql_query_one(pool, sql):
         return await cur.fetchall()
     except Exception as e:
         logging.error("mysql QUERY failure:{}".format(e))
-        sys.exit(1)
+        return None
     finally:
         await pool.release(conn)
 
@@ -127,17 +127,14 @@ async def mysql_node_can_signin(pool, address):
 async def mysql_get_node_bonus_remain(pool, address):
     sql = "SELECT remain FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit 1;" % address
     r = await mysql_query_one(pool, sql)
-    if r:
-        return r[0][0]
+    if r: return r[0][0]
     return '0'
 
 async def mysql_get_node_bonus_history(pool, address, offset, length):
     sql = "SELECT lockedbonus,teambonus,signinbonus,amount,total,remain,bonustime FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit %s,%s;" % (address, offset, length)
     r = await mysql_query_one(pool, sql)
-    result = []
-    for i in r:
-        result.append({'lockedbonus':i[0],'teambonus':i[1],'signinbonus':i[2],'amount':i[3],'total':i[4],'remain':i[5],'bonustime':i[6]})
-    return result
+    if r: return [{'lockedbonus':i[0],'teambonus':i[1],'signinbonus':i[2],'amount':i[3],'total':i[4],'remain':i[5],'bonustime':i[6]} for i in r]
+    return []
 
 async def mysql_get_nep5_asset_balance(pool, address, asset):
     sql = "SELECT value FROM balance WHERE address='%s' AND asset='%s';" % (address, asset)
@@ -148,11 +145,9 @@ async def mysql_get_nep5_asset_balance(pool, address, asset):
 async def mysql_get_utxo(pool, address, asset):
     if asset.startswith('0x'): asset = asset[2:]
     sql = "SELECT value,index_n,txid FROM utxos WHERE address='%s' AND asset='%s' AND status=1;" % (address,asset)
-    result = []
     r = await mysql_query_one(pool, sql)
-    for i in r:
-        result.append({'value':i[0],'prevIndex':i[1],'prevHash':i[2][2:]})
-    return result
+    if r: return [{'value':i[0],'prevIndex':i[1],'prevHash':i[2][2:]} for i in r]
+    return []
 
 async def cache_utxo(request, txid, utxos):
     cache = request.app['cache']
