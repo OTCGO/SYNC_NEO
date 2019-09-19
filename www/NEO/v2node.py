@@ -78,7 +78,7 @@ async def mysql_query_one(pool, sql):
         await pool.release(conn)
 
 async def mysql_get_node_status(pool, address):
-    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,signin FROM node WHERE address = '%s';" % address
+    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,smallareaburned,signin FROM node WHERE address = '%s';" % address
     r = await mysql_query_one(pool, sql)
     if r: return {
                 'status':r[0][0],
@@ -91,7 +91,8 @@ async def mysql_get_node_status(pool, address):
                 'penalty':r[0][7],
                 'teamlevelinfo':r[0][8],
                 'burned':r[0][9],
-                'signin':r[0][10]
+                'smallareaburned':r[0][10],
+                'signin':r[0][11]
                 }
     return None
 
@@ -248,7 +249,6 @@ async def mysql_node_signature_add(pool, address, signature):
 @format_result(['net','address'])
 @get('/v2/{net}/node/status/{address}')
 async def node_status(net, address, request):
-    if not Tool.validate_address(address): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
     s = await mysql_get_node_status(pool, address)
     if s is None:
@@ -362,7 +362,6 @@ async def node_details(net, address, request, *, index=0, length=100):
     result,info = valid_page_arg(index, length)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
     index, length = info['index'], info['length']
-    if not Tool.validate_address(address): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
     h = await mysql_get_node_bonus_history(pool, address, index, length)
     request['result']['data'] = {}
