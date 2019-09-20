@@ -4,6 +4,7 @@
 # Licensed under the MIT License.
 
 import time
+import asyncio
 import datetime
 import binascii
 from decimal import Decimal as D
@@ -16,7 +17,8 @@ from .assets import GAS
 from message import MSG
 
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
-RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
+#RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
+RECEIVE = 'Acs3FHua5pTUVrJjdYEZRR7j86YvDejc4h' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
 
@@ -225,7 +227,7 @@ def get_now_timepoint():
     return str(time.mktime(datetime.datetime.now().timetuple())).split('.')[0]
 
 async def mysql_node_update_new_node(pool, address, referrer, amount, days, txid, operation):
-    penalty = compute_penalty(amount, days)
+    penalty = compute_penalty(int(amount), int(days))
     timepoint = get_now_timepoint()
     sql = "INSERT INTO node_update(address,operation,referrer,amount,days,penalty,txid,timepoint) VALUES ('%s',%s,'%s','%s',%s,%s,'%s',%s)" % (address,operation,referrer,amount,days,penalty,txid,timepoint)
     n = await mysql_insert_one(pool, sql)
@@ -283,7 +285,7 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
-    if cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
+    if await cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
     operation = 1
     s = await mysql_query_node_status(pool, address)
     if address == referrer: #whole new top node or active old node
@@ -335,12 +337,6 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     txid = info['txid']
     if txid != Tool.compute_txid(transaction): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
-    re = await mysql_query_node_exist(pool, referrer)
-    if not re: request['result'].update(MSG['WRONG_ARGUMENT']);return
-    ae = await mysql_query_node_exist(pool, address)
-    if ae: request['result'].update(MSG['WRONG_ARGUMENT']);return
-    aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WRONG_ARGUMENT']);return
     #broadcast
     tx = Tool.get_transaction(publicKey, signature, transaction)
     #result,msg = await send_raw_transaction(tx, request)
@@ -361,7 +357,7 @@ async def node_unlock(net, request, *, publicKey, signature, message):
     result,_ = Tool.verify(publicKey, signature, message)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
-    if cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
+    if await cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
@@ -397,7 +393,7 @@ async def node_withdraw(net, request, *, amount, publicKey, signature, message):
     result,_ = Tool.verify(publicKey, signature, message)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
-    if cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
+    if await cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
@@ -418,7 +414,7 @@ async def node_signin(net, request, *, publicKey, signature, message):
     result,_ = Tool.verify(publicKey, signature, message)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
-    if cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
+    if await cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
