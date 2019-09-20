@@ -141,9 +141,11 @@ async def mysql_node_can_unlock(pool, address):
     return False
 
 async def mysql_node_can_signin(pool, address):
-    sql = "SELECT signin FROM node WHERE address='%s';" % address
+    sql = "SELECT status,days,signin FROM node WHERE address='%s';" % address
     r = await mysql_query_one(pool, sql)
-    if r: return r[0][0] == 1
+    if r:
+        status,days,signin = r[0][0],r[0][1],r[0][2]
+        if status >= 0 and status < days and signin == 0: return True
     return False
 
 async def mysql_get_node_bonus_remain(pool, address):
@@ -157,6 +159,22 @@ async def mysql_get_node_bonus_history(pool, address, offset, length):
     r = await mysql_query_one(pool, sql)
     if r: return [{'lockedbonus':i[0],'teambonus':i[1],'signinbonus':i[2],'amount':i[3],'total':i[4],'remain':i[5],'bonustime':i[6]} for i in r]
     return []
+
+async def mysql_get_node_signinbonus_history(pool, address):
+    sql = "SELECT signinbonus,bonustime FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit 31;" % address
+    r = await mysql_query_one(pool, sql)
+    result = []
+    if r:
+        m = datetime.datetime.now().month
+        for i in r:
+            sb,bt = i[0],i[1]
+            if sb == '0': continue
+            bt -= 60*60*24
+            dto = datetime.datetime.fromtimestamp(bt)
+            imonth,iday = dto.month,dto.day
+            if m == imonth: result.append(iday)
+        if result: result.reverse()
+    return result
 
 async def mysql_get_nep5_asset_balance(pool, address, asset):
     sql = "SELECT value FROM balance WHERE address='%s' AND asset='%s';" % (address, asset)
@@ -439,6 +457,12 @@ async def node_signin(net, request, *, publicKey, signature, message):
         request['result'].update(MSG['UNKNOWN_ERROR'])
         request['result']['message'] += ':'+'node signin failure'
         return 
+
+@format_result(['net','address'])
+@get('/v2/{net}/node/history/signin/{address}')
+async def node_history_signin(net, address, request):
+    pool = request.app['pool']
+    request['result']['data'] = await mysql_get_node_signinbonus_history(pool, address)
 
 
 @options('/v2/{net}/node/new')
