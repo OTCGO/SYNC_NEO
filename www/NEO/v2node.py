@@ -66,7 +66,7 @@ async def mysql_insert_one(pool, sql):
         num = cur.rowcount
         return num
     except Exception as e:
-        logger.error("mysql INSERT failure:{}".format(e))
+        logging.error("mysql INSERT failure:{}".format(e))
         return 0
     finally:
         await pool.release(conn)
