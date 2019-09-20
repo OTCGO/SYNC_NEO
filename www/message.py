@@ -21,5 +21,10 @@ MSG = {
         "NODE_NOT_EXIST":   {"code":600,"message":"node is not exist"},
         "WRONG_ARGUMENT_MESSAGE":   {"code":601,"message":"wrong argument: message"},
         "WRONG_ARGUMENT_SIGNATURE": {"code":602,"message":"wrong argument: signature"},
-        "SIGNATURE_ALREADY_EXIST":  {"code":603,"message":"signature already exist"},
+        "SIGNATURE_ALREADY_EXIST":  {"code":603,"message":"the signature already exist"},
+        "NODE_CREATING":            {"code":604,"message":"the node is creating, please wait"},
+        "NODE_WAIT_PROCESS":        {"code":605,"message":"the node is existing and waiting for system to process further"},
+        "NODE_ALREADY_EXIST":       {"code":606,"message":"the node already exist"},
+        "REFERRER_NODE_NOT_EXIST":  {"code":607,"message":"the referrer node not exist"},
+        "WAIT_OTHER_OPERATION":     {"code":608,"message":"other operation is processing, please wait"},
         }
