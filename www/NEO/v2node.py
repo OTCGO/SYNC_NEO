@@ -5,6 +5,7 @@
 
 import time
 import datetime
+import binascii
 from decimal import Decimal as D
 from coreweb import get, post, options
 import logging
@@ -32,7 +33,12 @@ def valid_amount(amount):
 
 def valid_msg(msg):
     lm = len(msg)
-    return lm % 2 == 0 and lm <= 20
+    if lm % 2 != 0 or lm > 20: return False
+    try:
+        m = binascii.unhexlify(msg)
+    except:
+        return False
+    return True
 
 def valid_page_arg(index, length):
     try:
@@ -254,14 +260,13 @@ async def node_status(net, address, request):
 @format_result(['net'])
 @post('/v2/{net}/node/new')
 async def node_new(net, request, *, referrer, amount, days, publicKey, signature, message):
-    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     if days not in DAYS: request['result'].update(MSG['WRONG_ARGUMENT']);return
     if amount not in AMOUNTS: request['result'].update(MSG['WRONG_ARGUMENT']);return
     if not Tool.validate_address(referrer): request['result'].update(MSG['WRONG_ARGUMENT']);return
     address = Tool.cpubkey_to_address(publicKey)
-    if address == referrer: request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
@@ -302,7 +307,7 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
 @post('/v2/{net}/node/broadcast')
 async def node_broadcast(net, request, *, publicKey, signature, transaction):
     result,_ = Tool.verify(publicKey, signature, transaction)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
     info = await get_node_info_from_cache(request, address)
     if info is None: 
@@ -320,7 +325,8 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     if aeu: request['result'].update(MSG['WRONG_ARGUMENT']);return
     #broadcast
     tx = Tool.get_transaction(publicKey, signature, transaction)
-    result,msg = await send_raw_transaction(tx, request)
+    #result,msg = await send_raw_transaction(tx, request)
+    result,msg = True,'' #test
     if result:
         await mysql_freeze_utxo(request, txid)
         result  = await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'])
@@ -333,9 +339,9 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
 @format_result(['net'])
 @post('/v2/{net}/node/unlock')
 async def node_unlock(net, request, *, publicKey, signature, message):
-    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
     if cache_node_exist(request, address): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
@@ -369,9 +375,9 @@ async def node_details(net, address, request, *, index=0, length=100):
 async def node_withdraw(net, request, *, amount, publicKey, signature, message):
     if not valid_amount(amount): request['result'].update(MSG['WRONG_ARGUMENT']);return
     amount = int(amount)
-    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
     if cache_node_exist(request, address): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
@@ -390,9 +396,9 @@ async def node_withdraw(net, request, *, amount, publicKey, signature, message):
 @format_result(['net'])
 @post('/v2/{net}/node/signin')
 async def node_signin(net, request, *, publicKey, signature, message):
-    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
     if cache_node_exist(request, address): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']

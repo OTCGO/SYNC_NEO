@@ -19,4 +19,7 @@ MSG = {
         "UNKNOWN_ERROR":    {"code":500,"message":"unknown error"},
 
         "NODE_NOT_EXIST":   {"code":600,"message":"node is not exist"},
+        "WRONG_ARGUMENT_MESSAGE":   {"code":601,"message":"wrong argument: message"},
+        "WRONG_ARGUMENT_SIGNATURE": {"code":602,"message":"wrong argument: signature"},
+        "SIGNATURE_ALREADY_EXIST":  {"code":603,"message":"signature already exist"},
         }
