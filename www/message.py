@@ -27,4 +27,5 @@ MSG = {
         "NODE_ALREADY_EXIST":       {"code":606,"message":"the node already exist"},
         "REFERRER_NODE_NOT_EXIST":  {"code":607,"message":"the referrer node not exist"},
         "WAIT_OTHER_OPERATION":     {"code":608,"message":"other operation is processing, please wait"},
+        "NODE_CREATE_TIMEOUT":      {"code":609,"message":"node creating timeout, please finish it in 120 seconds"},
         }

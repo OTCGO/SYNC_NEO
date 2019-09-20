@@ -21,6 +21,7 @@ SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
 RECEIVE = 'Acs3FHua5pTUVrJjdYEZRR7j86YvDejc4h' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
+OPERATION_REACTIVE_NODE = 5
 
 def valid_net(net, request):
     return net == request.app['net']
@@ -289,7 +290,7 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
     operation = 1
     s = await mysql_query_node_status(pool, address)
     if address == referrer: #whole new top node or active old node
-        if s in ['UNLOCK_ENSURED', 'EXIT_ENSURED']: operation = 5
+        if s in ['UNLOCK_ENSURED', 'EXIT_ENSURED']: operation = OPERATION_REACTIVE_NODE
         elif s is not None: request['result'].update(MSG['NODE_WAIT_PROCESS']);return
     else: #whole new but not the top
         if s is not None: request['result'].update(MSG['NODE_ALREADY_EXIST']);return
@@ -330,10 +331,7 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     address = Tool.cpubkey_to_address(publicKey)
     info = await get_node_info_from_cache(request, address)
-    if info is None: 
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+'node info expire'
-        return 
+    if info is None: request['result'].update(MSG['NODE_CREATE_TIMEOUT']);return
     txid = info['txid']
     if txid != Tool.compute_txid(transaction): request['result'].update(MSG['WRONG_ARGUMENT']);return
     pool = request.app['pool']
