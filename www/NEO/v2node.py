@@ -297,7 +297,7 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
         if rs is None: request['result'].update(MSG['REFERRER_NODE_NOT_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
     if aeu: request['result'].update(MSG['WAIT_OTHER_OPERATION']);return
-    fee = D('0.01')
+    fee = D('0.001')
     fee_utxos = []
     freeze_utxos = []
     balance = D(await mysql_get_nep5_asset_balance(pool, address, SEAC))
