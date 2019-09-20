@@ -273,6 +273,20 @@ async def node_status(net, address, request):
     else:
         request['result']['data'] = s
 
+async def send_raw_transaction(tx, request):
+    async with request.app['session'].post(request.app['neo_uri'],
+            json={'jsonrpc':'2.0','method':'sendrawtransaction','params':[tx],'id':10}) as resp:
+        method = 'sendrawtransaction'
+        if 200 != resp.status:
+            logging.error('Unable to visit %s %s' % (request.app['neo_uri'], method))
+            return False,'404'
+        j = await resp.json()
+        if 'error' in j.keys():
+            logging.error('result error when %s %s' % (request.app['neo_uri'], method))
+            return False, j['error']['message']
+        return j['result'],''
+
+
 @format_result(['net'])
 @post('/v2/{net}/node/new')
 async def node_new(net, request, *, referrer, amount, days, publicKey, signature, message):
@@ -341,10 +355,10 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     result,msg = True,'' #test
     if result:
         await mysql_freeze_utxo(request, txid)
-        result  = await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
-        if not result:
-            request['result'].update(MSG['UNKNOWN_ERROR'])
-            request['result']['message'] += ':'+'node create failure'
+        r= await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
+        if not r:
+            request['result'].update(MSG['TRANSACTION_BROADCAST_FAILURE'])
+            request['result']['message'] += ':' + msg
             return 
         request['result']['data'] = {'txid':txid};return
 
