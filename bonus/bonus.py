@@ -109,7 +109,7 @@ class Bonus:
     def compute_team_bonus(self, node):
         '''计算团队分红, 保留三位小数'''
         if node.level < 5:
-            return 0
+            return False, False, 0
         team_bonus = 0
         small_area_burned = False #小区烧伤
         big_small_area = node.compute_big_small_area()
@@ -192,12 +192,18 @@ class Bonus:
 
     async def check_tx_confirmed(self, txid):
         '''交易tx是否已确认'''
+        used = await self.db.is_txid_used(txid)
+        if used:
+            logger.warning('[NODE] check tx but txid({}) was be used'.format(txid))
+            return False
+
         if self.debug:
             return True
         try:
             res = requests.get(C.get_check_tx_confirmed_url().format(txid))
             data = res.json()
             if data and not data['error']:
+                await self.db.record_used_txid(txid, int(time.time()))
                 return True
         except Exception as e:
             logger.error('[NODE] check tx confirmed from super node err: {}'.format(e.args))
@@ -211,11 +217,17 @@ class Bonus:
         for up in updates:
             op = up['operation']
             if op == 1: #新节点
-                #找出推荐人
-                referrer_node = await self.db.get_node_by_address(up['referrer'])
-                if not referrer_node:
-                    logger.warning("[NODE] add node for address({}), but referrer({}) not found.".format(up['address'], up['referrer']))
-                else:
+                layer = 1
+                f = True
+                if up['address'] != up['referrer']:
+                    #找出推荐人
+                    referrer_node = await self.db.get_node_by_address(up['referrer'])
+                    if not referrer_node:
+                        logger.warning("[NODE] add node for address({}), but referrer({}) not found.".format(up['address'], up['referrer']))
+                        f = False
+                    else:
+                        layer = referrer_node.layer + 1
+                if f:
                     node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
                     node = {
                         'address': up['address'],
@@ -226,7 +238,8 @@ class Bonus:
                         'status': -1,
                         'signin': 0,
                         'nextbonustime': node_bonus_timepoint+2*C.get_bonus_interval(),
-                        'layer': referrer_node.layer+1,
+                        'layer':layer,
+                        'starttime': int(time.time()),
                         'bonusadvancetable': encode_advance_bonus_table(Node.zero_advance_bonus_table()),
                         'areaadvancetable': encode_advance_area_table(Node.zero_advance_area_table())
                     }
@@ -237,6 +250,21 @@ class Bonus:
                 await self.withdraw_bonus(up['address'], up['amount'])
             elif op == 4: #签到
                 await self.db.update_node_by_address({'address': up['address'], 'signin': 1})
+            elif op == 5: #激活节点
+                origin = await self.db.get_node_by_address(up['address'])
+                if origin:
+                    node_bonus_timepoint = await self.db.get_status('node_bonus_timepoint')
+                    await self.db.update_node_by_address({
+                        'address': up['address'],
+                        'amount': int(up['amount']),
+                        'days': up['days'],
+                        'txid': up['txid'],
+                        'status': -1,
+                        'signin': 0,
+                        'nextbonustime': node_bonus_timepoint + 2 * C.get_bonus_interval(),
+                    })
+                else:
+                    logger.warning('[NODE] active node({}) but not found'.format(up['address']))
             else:
                 logger.error('[NODE] wrong operation: {}'.format(op))
             await self.db.del_node_update(up['id'])

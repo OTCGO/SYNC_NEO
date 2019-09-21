@@ -367,7 +367,7 @@ class Node:
         self.area_advance_tabel = area_advance_tabel
         encode = encode_advance_area_table(self.area_advance_tabel)
         if encode != self.bonus_advance_table_encode:
-            self.bonus_advance_table_encode = encode
+            self.area_advance_tabel_encode = encode
             self.need_updated = True
 
     def compute_big_small_area(self):

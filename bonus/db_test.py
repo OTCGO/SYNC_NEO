@@ -6,6 +6,7 @@ import sys
 
 from db import DB
 from config import Config as C
+from node import Node, encode_advance_area_table, encode_advance_bonus_table
 
 def async_test(coro):
     def wrapper(*args, **kwargs):
@@ -49,12 +50,24 @@ async def del_all():
     conn, _ = await db.mysql_execute('delete from node_bonus')
     await db.pool.release(conn)
 
-async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level):
+async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level, bonus_table=Node.zero_advance_bonus_table(), area_table=Node.zero_advance_area_table()):
     '''插入节点'''
-    sql = 'INSERT INTO node(address,status,referrer,layer,amount,days,nextbonustime,nodelevel,teamlevelinfo,txid,starttime,performance) ' \
-          'VALUES ("{}",{},"{}",{},{},{},{},{},"{}","{}",{},{});'.format(address, status, ref, layer, amount, days,
-                next_bonus_time, level, team_level, rand_string(64), time.time(), 0)
-    await db.mysql_insert_one(sql)
+    n = {
+        'address': address,
+        'status': status,
+        # 'txid': rand_string(64),
+        'referrer': ref,
+        'layer': layer,
+        'amount': amount,
+        'days': days,
+        'nextbonustime': next_bonus_time,
+        'nodelevel': level,
+        'teamlevelinfo': team_level,
+        'starttime': int(time.time()),
+        'bonusadvancetable': encode_advance_bonus_table(bonus_table),
+        'areaadvancetable': encode_advance_area_table(area_table),
+    }
+    await db.insert_node(n)
 
 class TestDB(unittest.TestCase):
 
@@ -139,6 +152,34 @@ class TestDB(unittest.TestCase):
 
         b = await db.get_lastest_node_bonus(addr)
         self.assertEqual(3.28, float(b['total']))
+
+    @async_test
+    async def test_get_node_by_address(self):
+        '''根据地址查询节点'''
+
+    @async_test
+    async def test_get_nodes_by_status(self):
+        '''根据状态查出节点'''
+
+    @async_test
+    async def test_update_node_by_id(self):
+        '''更新节点数据'''
+
+    @async_test
+    async def test_update_node_by_address(self):
+        '''更新节点数据'''
+
+    @async_test
+    async def test_update_node_bonus_by_id(self):
+        '''更新节点收益表'''
+
+    @async_test
+    async def test_get_node_updates(self):
+        '''获得节点的更新数据'''
+
+    @async_test
+    async def test_insert_node_withdraw(self):
+        '''插入收益提取记录'''
 
 def run():
     loop.run_until_complete(init_db())

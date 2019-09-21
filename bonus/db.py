@@ -47,8 +47,8 @@ class DB:
             num = cur.rowcount
             return num
         except Exception as e:
-            logger.error("mysql INSERT failure:{}".format(e.args[0]))
-            sys.exit(1)
+            logger.error("mysql INSERT failure:{}".format(e.args))
+            raise e
         finally:
             if conn:
                 await self.pool.release(conn)
@@ -112,18 +112,14 @@ class DB:
         '''插入节点'''
         fields = []
         values = []
-        update_fields = []
         for k in node_dict:
             fields.append(k)
             if isinstance(node_dict[k], str):
                 values.append("'{}'".format(node_dict[k]))
-                if k != 'address':
-                    update_fields.append("{}='{}'".format(k, node_dict[k]))
             else:
                 values.append("{}".format(node_dict[k]))
-                update_fields.append("{}={}".format(k, node_dict[k]))
 
-        sql = "INSERT INTO node({}) VALUES ({}) ON DUPLICATE KEY UPDATE {};".format(fields, values, update_fields)
+        sql = "INSERT INTO node({}) VALUES ({});".format(','.join(fields), ','.join(values))
         await self.mysql_insert_one(sql)
 
     async def get_max_node_layer(self):
@@ -162,7 +158,7 @@ class DB:
 
     async def get_node_by_address(self, address):
         '''根据地址查询节点'''
-        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned FROM node WHERE address = '%s';" % address
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned,signin FROM node WHERE address = '%s';" % address
         results = await self.mysql_query_many(sql)
         for r in results:
             node = Node()
@@ -181,6 +177,7 @@ class DB:
             node.bonus_advance_table_encode = r[12]
             node.area_advance_tabel_encode = r[13]
             node.burned = r[14]
+            node.signin = r[15]
             node.bonus_advance_table = decode_advance_bonus_table(node.bonus_advance_table_encode)
             node.area_advance_tabel = decode_advance_area_table(node.area_advance_tabel_encode)
             return node
@@ -355,4 +352,17 @@ class DB:
         sql = 'INSERT INTO node_withdraw(address,txid,amount,timepoint,status) ' \
               'VALUES("{}","{}","{}",{},{});'.format(node_withdraw['address'], node_withdraw['txid'],
                         node_withdraw['amount'], node_withdraw['timepoint'], node_withdraw['status'])
+        await self.mysql_insert_one(sql)
+
+    async def is_txid_used(self, txid):
+        '''txid是否使用过'''
+        sql = "SELECT txid from node_used_txid WHERE txid='{}'".format(txid)
+        r = await self.mysql_insert_one(sql)
+        if r and r[0]:
+            return True
+        return False
+
+    async def record_used_txid(self, txid, timepoint):
+        '''记录使用过的txid'''
+        sql = "INSERT INTO node_used_txid(txid,timepoint) VALUES ('{}',{})".format(txid, timepoint)
         await self.mysql_insert_one(sql)

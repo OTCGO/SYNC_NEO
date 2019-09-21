@@ -5,7 +5,7 @@ import random
 
 from config import Config
 from bonus import Bonus
-from node import Node
+from node import Node, encode_advance_area_table, encode_advance_bonus_table
 
 def async_test(coro):
     def wrapper(*args, **kwargs):
@@ -27,12 +27,30 @@ async def init_bonus():
     bonus.debug = True
     await bonus.db.init_pool()
 
-async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level):
+async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level, bonus_table=Node.zero_advance_bonus_table(), area_table=Node.zero_advance_area_table()):
     '''插入节点'''
-    sql = 'INSERT INTO node(address,status,referrer,layer,amount,days,nextbonustime,nodelevel,teamlevelinfo,txid,starttime,performance) ' \
-          'VALUES ("{}",{},"{}",{},{},{},{},{},"{}","{}",{},{});'.format(address, status, ref, layer, amount, days,
-                next_bonus_time, level, team_level, rand_string(64), time.time(), 0)
+    n = {
+        'address': address,
+        'status': status,
+        'txid': rand_string(64),
+        'referrer': ref,
+        'layer': layer,
+        'amount': amount,
+        'days': days,
+        'nextbonustime': next_bonus_time,
+        'nodelevel': level,
+        'teamlevelinfo': team_level,
+        'starttime': int(time.time()),
+        'bonusadvancetable': encode_advance_bonus_table(bonus_table),
+        'areaadvancetable': encode_advance_area_table(area_table),
+    }
+    await bonus.db.insert_node(n)
+
+async def insert_node_update(addr, op, ref='', amount='0', days=0, penalty=0, txid=''):
+    sql = "INSERT INTO node_update(address,operation,referrer,amount,days,penalty,txid,timepoint) " \
+          "VALUES ('{}',{},'{}','{}',{},{},'{}',{})".format(addr, op, ref, amount, days, penalty, txid, int(time.time()))
     await bonus.db.mysql_insert_one(sql)
+
 async def get_node_by_address(address):
     sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals FROM node WHERE address = '%s';" % address
     r = await bonus.db.mysql_query_one(sql)
@@ -79,6 +97,10 @@ async def del_all():
     await bonus.db.pool.release(conn)
     conn, _ = await bonus.db.mysql_execute("delete from status;")
     await bonus.db.pool.release(conn)
+    conn, _ = await bonus.db.mysql_execute("delete from node_withdraw;")
+    await bonus.db.pool.release(conn)
+    conn, _ = await bonus.db.mysql_execute("delete from node_update;")
+    await bonus.db.pool.release(conn)
 
 class TestBonus(unittest.TestCase):
     @async_test
@@ -91,10 +113,12 @@ class TestBonus(unittest.TestCase):
         await bonus.prepare_status(now)
         address = rand_string(34)
         await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
+
+        await bonus.db.update_node_by_address({'address': address, 'signin': 1})
         await doBonus(31)
 
         b = await bonus.db.get_lastest_node_bonus(address)
-        expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
+        expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30']+Config.get_bonus_conf()['locked_bonus']['1000-30']*0.1, 3)
         self.assertEqual(expect_bonus, round(float(b['total']), 3))
         self.assertEqual(expect_bonus, round(float(b['remain']), 3))
 
@@ -108,7 +132,6 @@ class TestBonus(unittest.TestCase):
         await insert_node(address2, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
 
         await doBonus(31)
-
         b = await bonus.db.get_lastest_node_bonus(address)
         expect_bonus = round(30*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
         self.assertEqual(expect_bonus, round(float(b['total']), 3))
@@ -131,8 +154,104 @@ class TestBonus(unittest.TestCase):
 
         node1 = await get_node_by_address(address)
         self.assertIsNotNone(node1)
-        self.assertEqual(5, node1.level)
+        self.assertEqual(1, node1.level)
 
+        b = await bonus.db.get_lastest_node_bonus(address)
+        expect_bonus = round(2*Config.get_bonus_conf()['locked_bonus']['1000-30']+Config.get_bonus_conf()['locked_bonus']['1000-30']*0.2*2, 3)
+        self.assertEqual(expect_bonus, round(float(b['total']), 3))
+        self.assertEqual(expect_bonus, round(float(b['remain']), 3))
+
+    @async_test
+    async def test_handle_unconfirmed_node_tx(self):
+        address = rand_string(34)
+        await insert_node(address, -1, rand_string(34), 1, 1000, 30, 1, 1, '0'*96)
+        address2 = rand_string(34)
+        await insert_node(address2, 1, address, 2, 1000, 30, 1, 1, '0' * 96)
+        await bonus.handle_unconfirmed_node_tx()
+
+        node = await bonus.db.get_node_by_address(address)
+        self.assertEqual(0, node.status)
+        node = await bonus.db.get_node_by_address(address2)
+        self.assertEqual(1, node.status)
+
+    @async_test
+    async def test_handle_node_updates_new(self):
+        address = rand_string(34)
+        await insert_node_update(address, 1, ref=address, amount='1000', days=30, txid=rand_string(64))
+        await bonus.handle_node_updates()
+
+        node = await bonus.db.get_node_by_address(address)
+        self.assertEqual(1, node.layer)
+        updates = await bonus.db.get_node_updates()
+        self.assertEqual(0, len(updates))
+
+        address2 = rand_string(34)
+        await insert_node_update(address2, 1, ref=address, amount='1000', days=30, txid=rand_string(64))
+        await bonus.handle_node_updates()
+
+        node = await bonus.db.get_node_by_address(address2)
+        self.assertEqual(2, node.layer)
+        updates = await bonus.db.get_node_updates()
+        self.assertEqual(0, len(updates))
+
+    @async_test
+    async def test_handle_node_updates_unlock(self):
+        address = rand_string(34)
+        await insert_node(address, 0, rand_string(34), 1, 1000, 30, 1, 1, '0'*96)
+
+        await insert_node_update(address, 2)
+        await bonus.handle_node_updates()
+
+        node = await bonus.db.get_node_by_address(address)
+        self.assertEqual(-5, node.status)
+
+    @async_test
+    async def test_handle_node_updates_withdraw(self):
+        now = int(time.time())
+        await bonus.prepare_status(now)
+        address = rand_string(34)
+        await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
+        await doBonus(2)
+
+        await insert_node_update(address, 3, amount='1')
+        await bonus.handle_node_updates()
+
+        b = await bonus.db.get_lastest_node_bonus(address)
+        expect_bonus = round(2*Config.get_bonus_conf()['locked_bonus']['1000-30'], 3)
+        self.assertEqual(expect_bonus, round(float(b['total']), 3))
+        self.assertEqual(expect_bonus-1, round(float(b['remain']), 3))
+
+    @async_test
+    async def test_handle_node_updates_signin(self):
+        address = rand_string(34)
+        await insert_node(address, 0, rand_string(34), 1, 1000, 30, 1, 1, '0' * 96)
+
+        await insert_node_update(address, 4)
+        await bonus.handle_node_updates()
+        node = await bonus.db.get_node_by_address(address)
+        self.assertEqual(1, node.signin)
+
+    @async_test
+    async def test_handle_node_updates_active(self):
+        address = rand_string(34)
+        await insert_node_update(address, 1, ref=address, amount='1000', days=30, txid=rand_string(64))
+        await bonus.handle_node_updates()
+
+        node = await bonus.db.get_node_by_address(address)
+        self.assertEqual(1, node.layer)
+        self.assertEqual(-1, node.status)
+        updates = await bonus.db.get_node_updates()
+        self.assertEqual(0, len(updates))
+
+        txid = rand_string(64)
+        await insert_node_update(address, 5, amount='1000', days=30, txid=txid)
+        await bonus.handle_node_updates()
+
+        nodes = await bonus.db.get_nodes_by_status(-1)
+        node = nodes[0]
+        self.assertEqual(txid, node['txid'])
+        updates = await bonus.db.get_node_updates()
+        self.assertEqual(0, len(updates))
 
 def run():
     loop.run_until_complete(init_bonus())
