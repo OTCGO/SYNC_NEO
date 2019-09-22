@@ -402,8 +402,8 @@ async def node_unlock(net, request, *, publicKey, signature, message):
         return 
 
 @format_result(['net','address'])
-@get('/v2/{net}/node/details/{address}')
-async def node_details(net, address, request, *, index=0, length=100):
+@get('/v2/{net}/node/history/bonus/{address}')
+async def node_history_bonus(net, address, request, *, index=0, length=100):
     result,info = valid_page_arg(index, length)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
     index, length = info['index'], info['length']
