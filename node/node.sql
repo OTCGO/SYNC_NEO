@@ -73,3 +73,10 @@ CREATE TABLE IF NOT EXISTS node_signature (
   PRIMARY KEY (id),
   UNIQUE INDEX uidx_address_signature(address, signature(20))
 );
+
+CREATE TABLE IF NOT EXISTS node_used_txid (
+  id INT UNSIGNED AUTO_INCREMENT,
+  txid CHAR(64) UNIQUE NOT NULL,
+  timepoint INT UNSIGNED NOT NULL,
+  PRIMARY KEY (id)
+);

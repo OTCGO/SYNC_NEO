@@ -29,4 +29,7 @@ MSG = {
         "WAIT_OTHER_OPERATION":     {"code":608,"message":"other operation is processing, please wait"},
         "NODE_CREATE_TIMEOUT":      {"code":609,"message":"node creating timeout, please finish it in 120 seconds"},
         "TRANSACTION_BROADCAST_FAILURE":      {"code":610,"message":"transaction broadcast failure"},
+        "FORBIDDEN_SIGNIN":         {"code":611,"message":"forbidden signing in"},
+        "ALREADY_SIGNIN":           {"code":612,"message":"already sign in today"},
+        "SIGNIN_FAILURE":           {"code":613,"message":"sign in failure"},
         }

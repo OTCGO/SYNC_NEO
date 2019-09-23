@@ -145,8 +145,10 @@ async def mysql_node_can_signin(pool, address):
     r = await mysql_query_one(pool, sql)
     if r:
         status,days,signin = r[0][0],r[0][1],r[0][2]
-        if status >= 0 and status < days and signin == 0: return True
-    return False
+        if status >= 0 and status < days:
+            if signin == 0: return True
+            else: return False
+    return None
 
 async def mysql_get_node_bonus_remain(pool, address):
     sql = "SELECT remain FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit 1;" % address
@@ -155,9 +157,9 @@ async def mysql_get_node_bonus_remain(pool, address):
     return '0'
 
 async def mysql_get_node_bonus_history(pool, address, offset, length):
-    sql = "SELECT lockedbonus,teambonus,signinbonus,amount,total,remain,bonustime FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit %s,%s;" % (address, offset, length)
+    sql = "SELECT lockedbonus,referralsbonus,teambonus,signinbonus,amount,total,remain,bonustime FROM node_bonus WHERE address='%s' ORDER BY bonustime DESC limit %s,%s;" % (address, offset, length)
     r = await mysql_query_one(pool, sql)
-    if r: return [{'lockedbonus':i[0],'teambonus':i[1],'signinbonus':i[2],'amount':i[3],'total':i[4],'remain':i[5],'bonustime':i[6]} for i in r]
+    if r: return [{'lockedbonus':i[0],'referralsbonus':i[1],'teambonus':i[2],'signinbonus':i[3],'amount':i[4],'total':i[5],'remain':i[6],'bonustime':i[7]} for i in r]
     return []
 
 async def mysql_get_node_signinbonus_history(pool, address):
@@ -242,6 +244,34 @@ def compute_penalty(amount, days):
         if 360 == days: return 3600 # 36%
     raise ValueError("Wrong amount and days %s - %s".format(amount, days))
 
+def compute_daily_lockedbonus(amount, days):
+    if 1000 == amount:
+        if 30 == days: return '1.64'
+        if 90 == days: return '2.05'
+        if 180 == days: return '2.73'
+        if 360 == days: return '3.97'
+    if 3000 == amount:
+        if 30 == days: return '5.75'
+        if 90 == days: return '7.39'
+        if 180 == days: return '10.27'
+        if 360 == days: return '14.37'
+    if 5000 == amount:
+        if 30 == days: return '11.23'
+        if 90 == days: return '15.06'
+        if 180 == days: return '20.54'
+        if 360 == days: return '28.76'
+    if 10000 == amount:
+        if 30 == days: return '26.29'
+        if 90 == days: return '35.61'
+        if 180 == days: return '49.31'
+        if 360 == days: return '68.49'
+    raise ValueError("Wrong amount and days %s - %s".format(amount, days))
+
+def compute_daily_signinbonus(amount, days):
+    daily_lockedbonus = compute_daily_lockedbonus(amount, days)
+    daily_signinbonus = D(daily_lockedbonus) * D('0.1')
+    return str(daily_signinbonus.quantize(D('0.00')))
+
 def get_now_timepoint():
     return str(time.mktime(datetime.datetime.now().timetuple())).split('.')[0]
 
@@ -289,6 +319,12 @@ async def node_status(net, address, request):
     if s is None:
         request['result'].update(MSG['NODE_NOT_EXIST'])
     else:
+        static_total = 0
+        status,amount,days = s['status'],s['amount'],s['days']
+        if status > 0:
+            daily_lockedbonus = compute_daily_lockedbonus(amount, days)
+            static_total = D(daily_lockedbonus)*status
+        s['static_total'] = str(static_total)
         request['result']['data'] = s
 
 async def send_raw_transaction(tx, request):
@@ -449,20 +485,24 @@ async def node_signin(net, request, *, publicKey, signature, message):
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if aeu: request['result'].update(MSG['WAIT_OTHER_OPERATION']);return
     r = await mysql_node_can_signin(pool, address)
-    if not r: request['result'].update(MSG['WRONG_ARGUMENT']);return
-    result  = await mysql_node_update_signin(pool, address, amount)
-    if not result:
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+'node signin failure'
-        return 
+    if r is None: request['result'].update(MSG['FORBIDDEN_SIGNIN']);return
+    if r is False: request['result'].update(MSG['ALREADY_SIGNIN']);return
+    result  = await mysql_node_update_signin(pool, address)
+    if not result: request['result'].update(MSG['SIGNIN_FAILURE']);return 
 
 @format_result(['net','address'])
 @get('/v2/{net}/node/history/signin/{address}')
 async def node_history_signin(net, address, request):
     pool = request.app['pool']
-    request['result']['data'] = await mysql_get_node_signinbonus_history(pool, address)
+    s = await mysql_get_node_status(pool, address)
+    if s is None: request['result'].update(MSG['NODE_NOT_EXIST']);return
+    bonus = compute_daily_signinbonus(s['amount'],s['days'])
+    his = await mysql_get_node_signinbonus_history(pool, address)
+    total = '0'
+    if his: total = str(D(bonus)*len(his))
+    request['result']['data'] = {'total':total,'bonus':bonus,'history': his}
 
 
 @options('/v2/{net}/node/new')
