@@ -11,12 +11,11 @@ from node import Node, encode_advance_area_table, encode_advance_bonus_table
 class Bonus:
     #节点分组，key为推荐人，value为节点数组
     node_group = {}
-    debug = False
+    err_txid_dict = {}
 
     def __init__(self, mysql_args, bonus_conf):
         self.db = DB(mysql_args)
         self.bonus_conf = bonus_conf
-        self.debug = False
         pass
 
     async def prepare(self):
@@ -185,30 +184,52 @@ class Bonus:
         nodes = await self.db.get_nodes_by_status(-1)
         logger.info('[NODE] handle {} unconfirmed nodes.'.format(len(nodes)))
         for node in nodes:
-            ok = await self.check_tx_confirmed(node['txid'])
-            if ok:
-                await self.db.update_node_by_id({'id': node['id'], 'status': 0})
-                logger.info('[NODE] confirm tx success for node address({})'.format(node['address']))
+            status = await self.check_tx_confirmed(node['txid'], node['address'], node['amount'])
+            if status == 0:
+                await self.db.update_node_by_id({'id': node['id'], 'status': status})
+            elif status != -1:
+                continue
+            else:
+                if node['txid'] in self.err_txid_dict.keys():
+                    await self.db.update_node_by_id({'id': node['id'], 'status': status})
+                    del self.err_txid_dict[node['txid']]
+                else:#记录一次
+                    self.err_txid_dict[node['txid']] = status
+                    continue
 
-    async def check_tx_confirmed(self, txid):
+            logger.info('[NODE] confirm tx status({}) for node address({})'.format(status, node['address']))
+
+    async def check_tx_confirmed(self, txid, address, amount):
         '''交易tx是否已确认'''
         used = await self.db.is_txid_used(txid)
         if used:
             logger.warning('[NODE] check tx but txid({}) was be used'.format(txid))
-            return False
+            return -10
+        def find(histories, op, address):
+            amounts = []
+            for h in histories:
+                if h['operation'] == op and h['asset'] == C.get_check_seac_asset() and h['address'] == address:
+                    amounts.append(int(h['value']))
+            return amounts
 
-        if self.debug:
-            return True
         try:
-            res = requests.get(C.get_check_tx_confirmed_url().format(txid))
-            data = res.json()
-            if data and not data['error']:
-                await self.db.record_used_txid(txid, int(time.time()))
-                return True
+            hs = await self.db.get_tx_history_by_txid(txid)
+            if len(hs) == 0:
+                return -1
+            amounts = find(hs, 'in', C.get_address_for_receive_seac())
+            if len(amounts) == 0:
+                return -10
+            if not amount in amounts:
+                return -8
+            amounts = find(hs, 'out', address)
+            if len(amounts) == 0:
+                return -10
+            if not amount in amounts:
+                return -8
+            return 0
         except Exception as e:
-            logger.error('[NODE] check tx confirmed from super node err: {}'.format(e.args))
-            return False
-        return False
+            logger.error('[NODE] check tx confirmed tx err: {}'.format(e.args))
+        return -1
 
     async def handle_node_updates(self):
         '''处理用户的节点更新'''

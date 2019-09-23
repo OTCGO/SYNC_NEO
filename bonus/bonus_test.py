@@ -24,7 +24,6 @@ async def init_bonus():
     }
     global bonus
     bonus = Bonus(mysql_args, Config.get_bonus_conf())
-    bonus.debug = True
     await bonus.db.init_pool()
 
 async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level, bonus_table=Node.zero_advance_bonus_table(), area_table=Node.zero_advance_area_table()):

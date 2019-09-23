@@ -194,7 +194,7 @@ class DB:
 
     async def get_nodes_by_status(self, status):
         '''根据状态查出节点'''
-        sql = "SELECT id,txid,address FROM node WHERE status = %s;" % status
+        sql = "SELECT id,txid,address,amount FROM node WHERE status = %s;" % status
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
@@ -202,6 +202,7 @@ class DB:
             node['id'] = r[0]
             node['txid'] = r[1]
             node['address'] = r[2]
+            node['amount'] = r[3]
             nodes.append(node)
         return nodes
 
@@ -324,7 +325,7 @@ class DB:
 
     async def get_node_updates(self):
         '''获得节点的更新数据'''
-        sql = "SELECT id,address,operation,referrer,amount,days,penalty,txid FROM node_update;"
+        sql = "SELECT id,address,operation,referrer,amount,days,penalty,txid FROM node_update ORDER BY timepoint ASC;"
         results = await self.mysql_query_many(sql)
         updates = []
         for r in results:
@@ -366,3 +367,18 @@ class DB:
         '''记录使用过的txid'''
         sql = "INSERT INTO node_used_txid(txid,timepoint) VALUES ('{}',{})".format(txid, timepoint)
         await self.mysql_insert_one(sql)
+
+    async def get_tx_history_by_txid(self, txid):
+        '''获取交易历史'''
+        sql = "SELECT operation,address,value,asset FROM history WHERE txid='{}';".format(txid)
+        results = await self.mysql_query_many(sql)
+        histories = []
+        for r in results:
+            item = {
+                'operation': r[0],
+                'address': r[1],
+                'value': r[2],
+                'asset': r[3]
+            }
+            histories.append(item)
+        return histories

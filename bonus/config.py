@@ -69,5 +69,9 @@ class Config:
         return os.environ.get('BONUS_START_TIME')
 
     @staticmethod
-    def get_check_tx_confirmed_url():
-        return os.environ.get('CHECK_TX_CONFIRMED_URL')
+    def get_check_seac_asset():
+        return os.environ.get('SEAC_ASSET')
+
+    @staticmethod
+    def get_address_for_receive_seac():
+        return os.environ.get('ADDRESS_FOR_RECEIVE_SEAC')
