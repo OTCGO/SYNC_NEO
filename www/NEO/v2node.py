@@ -22,6 +22,7 @@ RECEIVE = 'Acs3FHua5pTUVrJjdYEZRR7j86YvDejc4h' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
 OPERATION_REACTIVE_NODE = 5
+UPDATE_STATUS={1:"NODE_CREATING",2:"NODE_UNLOCKING",3:"NODE_WITHDRAWING",4:"NODE_SIGNING",5:"NODE_REACTIVING"}
 
 def valid_net(net, request):
     return net == request.app['net']
@@ -125,9 +126,9 @@ async def mysql_query_node_status(pool, address):
     return None
 
 async def mysql_query_node_update_exist(pool, address):
-    sql = "SELECT address FROM node_update WHERE address='%s';" % address
+    sql = "SELECT operation FROM node_update WHERE address='%s';" % address
     r = await mysql_query_one(pool, sql)
-    if r: return True
+    if r: return UPDATE_STATUS[r[0][0]]
     return None
 
 async def mysql_node_can_unlock(pool, address):
@@ -310,23 +311,6 @@ async def mysql_node_signature_add(pool, address, signature):
     if n: return True
     return False
 
-
-@format_result(['net','address'])
-@get('/v2/{net}/node/status/{address}')
-async def node_status(net, address, request):
-    pool = request.app['pool']
-    s = await mysql_get_node_status(pool, address)
-    if s is None:
-        request['result'].update(MSG['NODE_NOT_EXIST'])
-    else:
-        static_total = 0
-        status,amount,days = s['status'],s['amount'],s['days']
-        if status > 0:
-            daily_lockedbonus = compute_daily_lockedbonus(amount, days)
-            static_total = D(daily_lockedbonus)*status
-        s['static_total'] = str(static_total)
-        request['result']['data'] = s
-
 async def send_raw_transaction(tx, request):
     async with request.app['session'].post(request.app['neo_uri'],
             json={'jsonrpc':'2.0','method':'sendrawtransaction','params':[tx],'id':10}) as resp:
@@ -341,15 +325,34 @@ async def send_raw_transaction(tx, request):
         return j['result'],''
 
 
+@format_result(['net','address'])
+@get('/v2/{net}/node/status/{address}')
+async def node_status(net, address, request):
+    pool = request.app['pool']
+    s = await mysql_get_node_status(pool, address)
+    if s is None:
+        request['result'].update(MSG['NODE_NOT_EXIST'])
+    else:
+        static_total = 0
+        static_all = 0
+        status,amount,days = s['status'],s['amount'],s['days']
+        if status >= 0:
+            daily_lockedbonus = compute_daily_lockedbonus(amount, days)
+            static_all = D(daily_lockedbonus)*days
+            if status !=0:static_total = D(daily_lockedbonus)*status
+        s['static_total'] = str(static_total)
+        s['static_all'] = str(static_all)
+        request['result']['data'] = s
+
 @format_result(['net'])
 @post('/v2/{net}/node/new')
 async def node_new(net, request, *, referrer, amount, days, publicKey, signature, message):
     if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
-    if days not in DAYS: request['result'].update(MSG['WRONG_ARGUMENT']);return
-    if amount not in AMOUNTS: request['result'].update(MSG['WRONG_ARGUMENT']);return
-    if not Tool.validate_address(referrer): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if days not in DAYS: request['result'].update(MSG['WRONG_ARGUMENT_DAYS']);return
+    if amount not in AMOUNTS: request['result'].update(MSG['WRONG_ARGUMENT_AMOUNT']);return
+    if not Tool.validate_address(referrer): request['result'].update(MSG['WRONG_ARGUMENT_REFERRER']);return
     address = Tool.cpubkey_to_address(publicKey)
     pool = request.app['pool']
     result = await mysql_node_signature_add(pool, address, signature)
@@ -365,7 +368,7 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
         rs = await mysql_query_node_status(pool, referrer)
         if rs is None: request['result'].update(MSG['REFERRER_NODE_NOT_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WAIT_OTHER_OPERATION']);return
+    if aeu: request['result'].update(MSG[aeu]);return
     fee = D('0.001')
     fee_utxos = []
     freeze_utxos = []
@@ -377,18 +380,12 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
     if fee_balance < fee: request['result'].update(MSG['INSUFFICIENT_FEE']);return
     fee_transaction,spent_utxos,msg = Tool.transfer_global_with_fee(address, [], [], '', fee, fee_utxos, GAS[2:])
     if spent_utxos: freeze_utxos.extend(spent_utxos)
-    else:
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+msg
-        return 
+    else: request['result'].update(MSG['NONE_UTXO_TO_USE']);return 
     transaction = transaction[0:-4] + fee_transaction[6:]
     txid = Tool.compute_txid(transaction)
     info = {'referrer':referrer,'amount':amount,'days':days, 'txid':txid, 'operation':operation}
     result = await cache_node_info(request, address, info)
-    if not result:
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+'node is in creating,please wait'
-        return 
+    if not result: request['result'].update(MSG['NODE_CREATING']);return
     await cache_utxo(request, txid, freeze_utxos)
     request['result']['data'] = {'transaction':transaction}
 
@@ -401,7 +398,7 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     info = await get_node_info_from_cache(request, address)
     if info is None: request['result'].update(MSG['NODE_CREATE_TIMEOUT']);return
     txid = info['txid']
-    if txid != Tool.compute_txid(transaction): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if txid != Tool.compute_txid(transaction): request['result'].update(MSG['WRONG_ARGUMENT_TRANSACTION']);return
     pool = request.app['pool']
     #broadcast
     tx = Tool.get_transaction(publicKey, signature, transaction)
@@ -428,20 +425,18 @@ async def node_unlock(net, request, *, publicKey, signature, message):
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if aeu: request['result'].update(MSG[aeu]);return
     r = await mysql_node_can_unlock(pool, address)
-    if not r: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not r: request['result'].update(MSG['FORBIDDEN_UNLOCK']);return
     result  = await mysql_node_update_unlock(pool, address)
     if not result:
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+'node unlock failure'
-        return 
+        request['result'].update(MSG['UNLOCK_FAILURE']);return
 
 @format_result(['net','address'])
 @get('/v2/{net}/node/history/bonus/{address}')
 async def node_history_bonus(net, address, request, *, index=0, length=100):
     result,info = valid_page_arg(index, length)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not result: request['result'].update(MSG['WRONG_ARGUMENT_INDEX_AND_LENGTH']);return
     index, length = info['index'], info['length']
     pool = request.app['pool']
     h = await mysql_get_node_bonus_history(pool, address, index, length)
@@ -453,7 +448,7 @@ async def node_history_bonus(net, address, request, *, index=0, length=100):
 @format_result(['net'])
 @post('/v2/{net}/node/withdraw')
 async def node_withdraw(net, request, *, amount, publicKey, signature, message):
-    if not valid_amount(amount): request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if not valid_amount(amount): request['result'].update(MSG['WRONG_ARGUMENT_AMOUNT']);return
     amount = int(amount)
     if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
@@ -464,14 +459,12 @@ async def node_withdraw(net, request, *, amount, publicKey, signature, message):
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if aeu: request['result'].update(MSG[aeu]);return
     r = D(await mysql_get_node_bonus_remain(pool, address))
-    if r < amount: request['result'].update(MSG['WRONG_ARGUMENT']);return
+    if r < amount: request['result'].update(MSG['WRONG_ARGUMENT_AMOUNT']);return
     result  = await mysql_node_update_withdraw(pool, address, amount)
     if not result:
-        request['result'].update(MSG['UNKNOWN_ERROR'])
-        request['result']['message'] += ':'+'node withdraw failure'
-        return 
+        request['result'].update(MSG['WITHDRAW_FAILURE']);return
 
 @format_result(['net'])
 @post('/v2/{net}/node/signin')
@@ -485,9 +478,9 @@ async def node_signin(net, request, *, publicKey, signature, message):
     result = await mysql_node_signature_add(pool, address, signature)
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu: request['result'].update(MSG['WAIT_OTHER_OPERATION']);return
+    if aeu: request['result'].update(MSG[aeu]);return
     r = await mysql_node_can_signin(pool, address)
-    if r is None: request['result'].update(MSG['FORBIDDEN_SIGNIN']);return
+    if r is None: request['result'].update(MSG['NODE_NOT_EXIST']);return
     if r is False: request['result'].update(MSG['ALREADY_SIGNIN']);return
     result  = await mysql_node_update_signin(pool, address)
     if not result: request['result'].update(MSG['SIGNIN_FAILURE']);return 
@@ -495,14 +488,21 @@ async def node_signin(net, request, *, publicKey, signature, message):
 @format_result(['net','address'])
 @get('/v2/{net}/node/history/signin/{address}')
 async def node_history_signin(net, address, request):
+    status = 0 #0可签 1已签 2待签 3待其他操作
     pool = request.app['pool']
+    aeu = await mysql_query_node_update_exist(pool, address)
+    if aeu is None: pass
+    elif aeu == "NODE_SIGNING": status = 2
+    else: status = 3
+    r = await mysql_node_can_signin(pool, address)
+    if r is False: status = 1
     s = await mysql_get_node_status(pool, address)
     if s is None: request['result'].update(MSG['NODE_NOT_EXIST']);return
     bonus = compute_daily_signinbonus(s['amount'],s['days'])
     his = await mysql_get_node_signinbonus_history(pool, address)
     total = '0'
     if his: total = str(D(bonus)*len(his))
-    request['result']['data'] = {'total':total,'bonus':bonus,'history': his}
+    request['result']['data'] = {'status':status,'total':total,'bonus':bonus,'history': his}
 
 
 @options('/v2/{net}/node/new')

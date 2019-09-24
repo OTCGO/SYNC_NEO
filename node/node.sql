@@ -3,7 +3,7 @@ USE sea;
 CREATE TABLE IF NOT EXISTS node (
   id INT UNSIGNED AUTO_INCREMENT,
   txid CHAR(64) UNIQUE NOT NULL,
-  status SMALLINT DEFAULT -1 NOT NULL, # -7解锁已确认 -6解锁已退币待确认 -5解锁未退币 -4退出已确认 -3退出已退币待确认 -2退出未退币 -1新节点未确认 0新节点已确认
+  status SMALLINT DEFAULT -1 NOT NULL, #-10无效交易 -9收款方不一致 -8交易金额不一致 -7解锁已确认 -6解锁已退币待确认 -5解锁未退币 -4退出已确认 -3退出已退币待确认 -2退出未退币 -1新节点未确认 0新节点已确认
   referrer VARCHAR(34) NOT NULL,
   address VARCHAR(34) UNIQUE NOT NULL,
   amount INT UNSIGNED NOT NULL,
@@ -78,5 +78,19 @@ CREATE TABLE IF NOT EXISTS node_used_txid (
   id INT UNSIGNED AUTO_INCREMENT,
   txid CHAR(64) UNIQUE NOT NULL,
   timepoint INT UNSIGNED NOT NULL,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS node_update_history (
+  id INT UNSIGNED AUTO_INCREMENT,
+  address VARCHAR(34) NOT NULL,
+  operation TINYINT UNSIGNED NOT NULL, #1新节点 2解锁 3提取 4签到 5旧节点激活
+  referrer VARCHAR(34) DEFAULT '' NOT NULL,
+  amount VARCHAR(40) DEFAULT '0' NOT NULL,
+  days SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
+  penalty INT UNSIGNED DEFAULT 0 NOT NULL,
+  txid VARCHAR(64) DEFAULT '' NOT NULL,
+  timepoint INT UNSIGNED NOT NULL,
+  status SMALLINT DEFAULT 0 NOT NULL, #0表示失败，1成功
   PRIMARY KEY (id)
 );
