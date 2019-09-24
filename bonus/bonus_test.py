@@ -285,6 +285,36 @@ class TestBonus(unittest.TestCase):
         updates = await bonus.db.get_node_updates()
         self.assertEqual(0, len(updates))
 
+    @async_test
+    async def test_level_one_to_four(self):
+        '''测试等级 1—4'''
+        now = int(time.time())
+        await bonus.prepare_status(now)
+        async def insert(amount, ref=''):
+            address = rand_string(34)
+            txid1 = rand_string(64)
+            if ref == '':
+                ref = address
+            await insert_node_update(address, 1, ref=ref, amount=str(amount), days=30, txid=txid1)
+            await insert_history(txid1, 'out', address, amount)
+            await insert_history(txid1, 'in', Config.get_address_for_receive_seac(), amount)
+            return address
+        address1 = await insert(1000)
+        address2 = await insert(3000)
+        address3 = await insert(5000)
+        address4 = await insert(10000)
+        await bonus.handle_node_updates()
+        await bonus.handle_unconfirmed_node_tx()
+        await doBonus(1)
+
+        async def check_level(address, level):
+            node = await bonus.db.get_node_by_address(address)
+            self.assertEqual(level, node.level)
+        await check_level(address1, 1)
+        await check_level(address2, 2)
+        await check_level(address3, 3)
+        await check_level(address4, 4)
+
 def run():
     loop.run_until_complete(init_bonus())
     loop.run_until_complete(unittest.main())
