@@ -26,12 +26,12 @@ async def init_bonus():
     bonus = Bonus(mysql_args, Config.get_bonus_conf())
     await bonus.db.init_pool()
 
-async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level, bonus_table=Node.zero_advance_bonus_table(), area_table=Node.zero_advance_area_table()):
+async def insert_node(address, status, ref, layer, amount, days, next_bonus_time, level, team_level, txid='', bonus_table=Node.zero_advance_bonus_table(), area_table=Node.zero_advance_area_table()):
     '''插入节点'''
     n = {
         'address': address,
         'status': status,
-        'txid': rand_string(64),
+        'txid': rand_string(64) if txid == '' else txid,
         'referrer': ref,
         'layer': layer,
         'amount': amount,
@@ -48,6 +48,11 @@ async def insert_node(address, status, ref, layer, amount, days, next_bonus_time
 async def insert_node_update(addr, op, ref='', amount='0', days=0, penalty=0, txid=''):
     sql = "INSERT INTO node_update(address,operation,referrer,amount,days,penalty,txid,timepoint) " \
           "VALUES ('{}',{},'{}','{}',{},{},'{}',{})".format(addr, op, ref, amount, days, penalty, txid, int(time.time()))
+    await bonus.db.mysql_insert_one(sql)
+
+async def insert_history(txid, op, address, amount):
+    sql = "INSERT INTO history(txid,operation,index_n,address,value,timepoint,asset) " \
+          "VALUES ('{}','{}',0,'{}','{}',{},'{}');".format(txid, op, address, amount, int(time.time()), Config.get_check_seac_asset())
     await bonus.db.mysql_insert_one(sql)
 
 async def get_node_by_address(address):
@@ -163,15 +168,43 @@ class TestBonus(unittest.TestCase):
     @async_test
     async def test_handle_unconfirmed_node_tx(self):
         address = rand_string(34)
-        await insert_node(address, -1, rand_string(34), 1, 1000, 30, 1, 1, '0'*96)
+        txid1 = rand_string(64)
+        await insert_node(address, -1, rand_string(34), 1, 1000, 30, 1, 1, '0'*96, txid=txid1)
+        await insert_history(txid1, 'out', address, 1000)
+        await insert_history(txid1, 'in', Config.get_address_for_receive_seac(), 1000)
+
         address2 = rand_string(34)
-        await insert_node(address2, 1, address, 2, 1000, 30, 1, 1, '0' * 96)
+        txid2 = rand_string(64)
+        await insert_node(address2, 1, address, 2, 1000, 30, 1, 1, '0' * 96, txid=txid2)
+        await insert_history(txid2, 'out', address2, 1000)
+        await insert_history(txid2, 'in', Config.get_address_for_receive_seac(), 1000)
+
+        #amount不匹配
+        address3 = rand_string(34)
+        txid3 = rand_string(64)
+        await insert_node(address3, -1, address, 2, 1000, 30, 1, 1, '0' * 96, txid=txid3)
+        await insert_history(txid3, 'out', address3, 900)
+        await insert_history(txid3, 'in', Config.get_address_for_receive_seac(), 900)
+
+        #使用过的txid
+        address4 = rand_string(34)
+        txid4 = rand_string(64)
+        await insert_node(address4, -1, address, 2, 1000, 30, 1, 1, '0' * 96, txid=txid4)
+        await insert_history(txid4, 'out', address3, 1000)
+        await insert_history(txid4, 'in', Config.get_address_for_receive_seac(), 1000)
+        await bonus.db.record_used_txid(txid4, time.time())
+
+        await bonus.handle_unconfirmed_node_tx()
         await bonus.handle_unconfirmed_node_tx()
 
         node = await bonus.db.get_node_by_address(address)
         self.assertEqual(0, node.status)
         node = await bonus.db.get_node_by_address(address2)
         self.assertEqual(1, node.status)
+        node = await bonus.db.get_node_by_address(address3)
+        self.assertEqual(-8, node.status)
+        node = await bonus.db.get_node_by_address(address4)
+        self.assertEqual(-10, node.status)
 
     @async_test
     async def test_handle_node_updates_new(self):

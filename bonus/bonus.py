@@ -187,7 +187,7 @@ class Bonus:
             status = await self.check_tx_confirmed(node['txid'], node['address'], node['amount'])
             if status == 0:
                 await self.db.update_node_by_id({'id': node['id'], 'status': status})
-            elif status != -1:
+            elif status == -1:
                 continue
             else:
                 if node['txid'] in self.err_txid_dict.keys():
@@ -265,12 +265,16 @@ class Bonus:
                         'areaadvancetable': encode_advance_area_table(Node.zero_advance_area_table())
                     }
                     await self.db.insert_node(node)
+                    up['status'] = 1
             elif op == 2: #解锁
                 await self.db.update_node_by_address({'address': up['address'], 'status': -5})
+                up['status'] = 1
             elif op == 3: #提取
                 await self.withdraw_bonus(up['address'], up['amount'])
+                up['status'] = 1
             elif op == 4: #签到
                 await self.db.update_node_by_address({'address': up['address'], 'signin': 1})
+                up['status'] = 1
             elif op == 5: #激活节点
                 origin = await self.db.get_node_by_address(up['address'])
                 if origin:
@@ -284,11 +288,14 @@ class Bonus:
                         'signin': 0,
                         'nextbonustime': node_bonus_timepoint + 2 * C.get_bonus_interval(),
                     })
+                    up['status'] = 1
                 else:
                     logger.warning('[NODE] active node({}) but not found'.format(up['address']))
             else:
                 logger.error('[NODE] wrong operation: {}'.format(op))
             await self.db.del_node_update(up['id'])
+            up['timepoint'] = int(time.time())
+            await self.db.insert_node_update_history(up)
 
     async def withdraw_bonus(self, address, amount):
         '''提取分红'''

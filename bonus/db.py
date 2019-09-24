@@ -38,6 +38,7 @@ class DB:
             return conn, cur
         except Exception as e:
             logger.error("mysql SQL:{} failure:{}".format(sql, e.args[0]))
+            await self.pool.release(conn)
             raise e
 
     async def mysql_insert_one(self, sql):
@@ -357,8 +358,8 @@ class DB:
 
     async def is_txid_used(self, txid):
         '''txid是否使用过'''
-        sql = "SELECT txid from node_used_txid WHERE txid='{}'".format(txid)
-        r = await self.mysql_insert_one(sql)
+        sql = "SELECT txid from node_used_txid WHERE txid='{}';".format(txid)
+        r = await self.mysql_query_one(sql)
         if r and r[0]:
             return True
         return False
@@ -382,3 +383,17 @@ class DB:
             }
             histories.append(item)
         return histories
+
+    async def insert_node_update_history(self, history_dict):
+        '''插入节点更新历史'''
+        fields = []
+        values = []
+        for k in history_dict:
+            fields.append(k)
+            if isinstance(history_dict[k], str):
+                values.append("'{}'".format(history_dict[k]))
+            else:
+                values.append("{}".format(history_dict[k]))
+
+        sql = "INSERT INTO node_update_history({}) VALUES ({});".format(','.join(fields), ','.join(values))
+        await self.mysql_insert_one(sql)
