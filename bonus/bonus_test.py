@@ -315,6 +315,134 @@ class TestBonus(unittest.TestCase):
         await check_level(address3, 3)
         await check_level(address4, 4)
 
+    @async_test
+    async def test_level_five(self):
+        '''测试等级5'''
+        '''
+                5
+             /    \
+           4       4
+        '''
+        now = int(time.time())
+        await bonus.prepare_status(now)
+        async def insert(amount, ref=''):
+            address = rand_string(34)
+            txid1 = rand_string(64)
+            if ref == '':
+                ref = address
+            await insert_node_update(address, 1, ref=ref, amount=str(amount), days=30, txid=txid1)
+            await insert_history(txid1, 'out', address, amount)
+            await insert_history(txid1, 'in', Config.get_address_for_receive_seac(), amount)
+            return address
+        addr1 = await insert(1000)
+        addr2 = await insert(10000, ref=addr1)
+        addr3 = await insert(10000, ref=addr1)
+        await bonus.handle_node_updates()
+        await bonus.handle_unconfirmed_node_tx()
+
+        await doBonus(3)
+
+        node = await bonus.db.get_node_by_address(addr1)
+        self.assertEqual(5, node.level)
+        self.assertEqual(2, node.referrals)
+        self.assertEqual(20000, node.performance)
+        self.assertEqual(1, node.status)
+        self.assertEqual(1, node.burned)
+        self.assertEqual(0, node.small_area_burned)
+
+        b = await bonus.db.get_lastest_node_bonus(addr1)
+        locked_bonus = 1*Config.get_bonus_conf()['locked_bonus']['1000-30']
+        referrals_bonus = 2*0.2*Config.get_bonus_conf()['locked_bonus']['10000-30']
+        team_bonus = 2*Config.get_bonus_conf()['locked_bonus']['10000-30']*(1-Config.get_bonus_conf()['level_burned_bonus']['low_one'])*Config.get_bonus_conf()['team_bonus_rate'][5]
+        self.assertEqual(locked_bonus, float(b['locked_bonus']))
+        self.assertEqual(referrals_bonus, float(b['referrals_bonus']))
+        self.assertEqual(round(team_bonus, 3), float(b['team_bonus']))
+        self.assertEqual(round(locked_bonus+referrals_bonus+team_bonus, 3), float(b['total']))
+
+    @async_test
+    async def test_small_area_burned(self):
+        '''测试小区烧伤'''
+        '''
+                           5
+                        /    \ 
+                      6       3  
+                   /  |  \      \
+                 5    5    5     1
+               /  \  / \  / \
+              4   4 4  4 4   4  
+        '''
+        now = int(time.time())
+        await bonus.prepare_status(now)
+        async def insert(amount, ref=''):
+            time.sleep(1)
+            address = rand_string(34)
+            txid1 = rand_string(64)
+            if ref == '':
+                ref = address
+            await insert_node_update(address, 1, ref=ref, amount=str(amount), days=30, txid=txid1)
+            await insert_history(txid1, 'out', address, amount)
+            await insert_history(txid1, 'in', Config.get_address_for_receive_seac(), amount)
+            return address
+        a1 = await insert(10000)
+        a2 = await insert(10000, ref=a1)
+        a3 = await insert(5000, ref=a1)
+        a4 = await insert(10000, ref=a2)
+        a5 = await insert(10000, ref=a2)
+        a6 = await insert(10000, ref=a2)
+        a7 = await insert(1000, ref=a3)
+        a8 = await insert(10000, ref=a4)
+        a9 = await insert(10000, ref=a4)
+        a10 = await insert(10000, ref=a5)
+        a11 = await insert(10000, ref=a5)
+        a12 = await insert(10000, ref=a6)
+        a13 = await insert(10000, ref=a6)
+
+        await bonus.handle_node_updates()
+        await bonus.handle_unconfirmed_node_tx()
+
+        await doBonus(3)
+        async def check_node(addr, level, perf, status, burned, small_area_burned, referrals):
+            node = await bonus.db.get_node_by_address(addr)
+            self.assertEqual(level, node.level)
+            self.assertEqual(perf, node.performance)
+            self.assertEqual(status, node.status)
+            self.assertEqual(burned, node.burned)
+            self.assertEqual(small_area_burned, node.small_area_burned)
+            self.assertEqual(referrals, node.referrals)
+        await check_node(a1, 5, 106000, 1, 1, 1, 2)
+        await check_node(a2, 6, 90000, 1, 1, 0, 3)
+        await check_node(a3, 3, 1000, 1, 0, 0, 1)
+        await check_node(a4, 5, 20000, 1, 1, 0, 2)
+        await check_node(a5, 5, 20000, 1, 1, 0, 2)
+        await check_node(a6, 5, 20000, 1, 1, 0, 2)
+        await check_node(a7, 1, 0, 1, 0, 0, 0)
+        await check_node(a8, 4, 0, 1, 0, 0, 0)
+        await check_node(a9, 4, 0, 1, 0, 0, 0)
+        await check_node(a10, 4, 0, 1, 0, 0, 0)
+        await check_node(a11, 4, 0, 1, 0, 0, 0)
+        await check_node(a12, 4, 0, 1, 0, 0, 0)
+        await check_node(a13, 4, 0, 1, 0, 0, 0)
+
+        async def check_bonus(addr, locked_bonus, referrals_bonus, team_bonus):
+            b = await bonus.db.get_lastest_node_bonus(addr)
+            self.assertEqual(locked_bonus, float(b['locked_bonus']))
+            self.assertEqual(referrals_bonus, float(b['referrals_bonus']))
+            self.assertEqual(round(team_bonus, 3), float(b['team_bonus']))
+            self.assertEqual(round(locked_bonus+referrals_bonus+team_bonus, 3), float(b['total']))
+        #a1
+        conf = Config.get_bonus_conf()
+        locked_bonus = conf['locked_bonus']['10000-30']
+        referrals_bonus = 0.2*(conf['locked_bonus']['10000-30']+conf['locked_bonus']['5000-30'])
+        team_bonus = 10*conf['locked_bonus']['10000-30']*(1-conf['level_burned_bonus']['high_level'])*conf['team_bonus_rate'][5] + (conf['locked_bonus']['5000-30']+conf['locked_bonus']['1000-30'])*(1-conf['small_area_burned_bonus']) *conf['team_bonus_rate'][5]
+        await check_bonus(a1, locked_bonus, referrals_bonus, team_bonus)
+
+        #a3
+        locked_bonus = conf['locked_bonus']['5000-30']
+        referrals_bonus = 0.2 * conf['locked_bonus']['1000-30']
+        team_bonus = 0
+        await check_bonus(a3, locked_bonus, referrals_bonus, team_bonus)
+
+
 def run():
     loop.run_until_complete(init_bonus())
     loop.run_until_complete(unittest.main())

@@ -131,7 +131,7 @@ class DB:
         return 0
 
     async def get_node_for_bonus(self, layer):
-        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned,signin FROM node WHERE layer = %s;" % layer
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned,signin,smallareaburned FROM node WHERE layer = %s;" % layer
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
@@ -152,6 +152,7 @@ class DB:
             node.area_advance_tabel_encode = r[13]
             node.burned = r[14]
             node.signin = r[15]
+            node.small_area_burned = r[16]
             node.bonus_advance_table = decode_advance_bonus_table(node.bonus_advance_table_encode)
             node.area_advance_tabel = decode_advance_area_table(node.area_advance_tabel_encode)
             nodes.append(node)
@@ -159,7 +160,7 @@ class DB:
 
     async def get_node_by_address(self, address):
         '''根据地址查询节点'''
-        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned,signin FROM node WHERE address = '%s';" % address
+        sql = "SELECT id,status,referrer,address,amount,days,layer,nextbonustime,nodelevel,performance,teamlevelinfo,referrals,bonusadvancetable,areaadvancetable,burned,signin,smallareaburned FROM node WHERE address = '%s';" % address
         results = await self.mysql_query_many(sql)
         for r in results:
             node = Node()
@@ -179,6 +180,7 @@ class DB:
             node.area_advance_tabel_encode = r[13]
             node.burned = r[14]
             node.signin = r[15]
+            node.small_area_burned = r[16]
             node.bonus_advance_table = decode_advance_bonus_table(node.bonus_advance_table_encode)
             node.area_advance_tabel = decode_advance_area_table(node.area_advance_tabel_encode)
             return node
@@ -247,7 +249,7 @@ class DB:
 
     async def get_lastest_node_bonus(self, address):
         '''获得节点最新分红记录'''
-        sql = 'SELECT total,remain,bonustime,id FROM node_bonus WHERE address="{}" ORDER BY bonustime DESC LIMIT 1;'.format(address)
+        sql = 'SELECT total,remain,bonustime,id,lockedbonus,teambonus,referralsbonus,signinbonus FROM node_bonus WHERE address="{}" ORDER BY bonustime DESC LIMIT 1;'.format(address)
         r = await self.mysql_query_one(sql)
         b = {}
         if r:
@@ -255,6 +257,10 @@ class DB:
             b['remain'] = r[1]
             b['bonus_time'] = r[2]
             b['id'] = r[3]
+            b['locked_bonus'] = r[4]
+            b['team_bonus'] = r[5]
+            b['referrals_bonus'] = r[6]
+            b['signin_bonus'] = r[7]
         return b
 
     async def update_node_bonus_by_id(self, node_bonus):

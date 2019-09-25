@@ -121,7 +121,10 @@ class Bonus:
             if k in ['high_level', 'equal_level', 'low_one'] and info[k] > 0:
                 burned = True
             if small_area_burned and k == 'normal':
-                team_bonus += info[k] * (1-self.bonus_conf['level_burned_bonus'][k]) * (1-self.bonus_conf['small_area_burned_bonus'])
+                b = info[k] * (1-self.bonus_conf['level_burned_bonus'][k])
+                if small_area_burned:
+                    b = b*(1-self.bonus_conf['small_area_burned_bonus'])
+                team_bonus += b
             else:
                 team_bonus += info[k] * (1-self.bonus_conf['level_burned_bonus'][k])
         return burned, small_area_burned, round(team_bonus*self.bonus_conf['team_bonus_rate'][node.level], 3)
