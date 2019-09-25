@@ -8,6 +8,7 @@ import asyncio
 import datetime
 import binascii
 from decimal import Decimal as D
+from decimal import ROUND_DOWN, ROUND_UP
 from coreweb import get, post, options
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -16,6 +17,7 @@ from .tools import Tool
 from .assets import GAS
 from message import MSG
 
+
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
 #RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
 RECEIVE = 'Acs3FHua5pTUVrJjdYEZRR7j86YvDejc4h' #test
@@ -23,6 +25,9 @@ AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
 OPERATION_REACTIVE_NODE = 5
 UPDATE_STATUS={1:"NODE_CREATING",2:"NODE_UNLOCKING",3:"NODE_WITHDRAWING",4:"NODE_SIGNING",5:"NODE_REACTIVING"}
+FEES = {1:'0.05',2:'0.05',3:'0.05',4:'0.05',5:'0.045',6:'0.04',7:'0.035',8:'0.03',9:'0.025'}
+MIN_WITHDRAW_FEE = 5
+
 
 def valid_net(net, request):
     return net == request.app['net']
@@ -298,6 +303,21 @@ async def mysql_node_update_withdraw(pool, address, amount):
     if n: return True
     return False
 
+def get_max_withdraw_amount(remain):
+    amount = int(str(D(remain).quantize(D('0'), rounding=ROUND_DOWN)))
+    if amount <= MIN_WITHDRAW_FEE: return None
+    return amount
+
+def get_withdraw_fee(amount,fee_rate):
+    fee = (D(amount) * D(fee_rate)).quantize(D('0.'), rounding=ROUND_UP)
+    if fee < MIN_WITHDRAW_FEE: fee = MIN_WITHDRAW_FEE
+    return fee
+
+async def mysql_get_node_withdraw_count(pool, address):
+    sql = "SELECT count(id) FROM node_withdraw where address='%s' and status=0;" % address
+    n = await mysql_insert_one(pool, sql)
+    return n
+
 async def mysql_node_update_signin(pool, address):
     timepoint = get_now_timepoint()
     sql = "INSERT INTO node_update(address,operation,timepoint) VALUES ('%s',4,%s);" % (address,timepoint)
@@ -439,17 +459,26 @@ async def node_history_bonus(net, address, request, *, index=0, length=100):
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_INDEX_AND_LENGTH']);return
     index, length = info['index'], info['length']
     pool = request.app['pool']
+    s = await mysql_get_node_status(pool, address)
+    nodelevel = s['nodelevel']
+    fee_rate = FEES[nodelevel]
+    if s is None: request['result'].update(MSG['NODE_NOT_EXIST']);return
     h = await mysql_get_node_bonus_history(pool, address, index, length)
-    request['result']['data'] = {'total':'0','history':[]}
+    request['result']['data'] = {'total':'0','remain':'0','fee':fee_rate,'withdraw_max':'0','withdraw_actually':'0','history':[]}
     if h:
         request['result']['data']['total'] = h[0]['total']
+        request['result']['data']['remain'] = h[0]['remain']
         request['result']['data']['history'] = h
+        remain = D(h[0]['remain'])
+        withdraw_max = get_max_withdraw_amount(h[0]['remain'])
+        if withdraw_max is None: return
+        withdraw_fee = get_withdraw_fee(withdraw_max, fee_rate)
+        request['result']['data']['withdraw_max'] = str(withdraw_max)
+        request['result']['data']['withdraw_actually'] = str(withdraw_max - withdraw_fee)
 
 @format_result(['net'])
 @post('/v2/{net}/node/withdraw')
-async def node_withdraw(net, request, *, amount, publicKey, signature, message):
-    if not valid_amount(amount): request['result'].update(MSG['WRONG_ARGUMENT_AMOUNT']);return
-    amount = int(amount)
+async def node_withdraw(net, request, *, publicKey, signature, message):
     if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
     result,_ = Tool.verify(publicKey, signature, message)
     if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
@@ -460,8 +489,10 @@ async def node_withdraw(net, request, *, amount, publicKey, signature, message):
     if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
     if aeu: request['result'].update(MSG[aeu]);return
-    r = D(await mysql_get_node_bonus_remain(pool, address))
-    if r < amount: request['result'].update(MSG['WRONG_ARGUMENT_AMOUNT']);return
+    amount = get_max_withdraw_amount(await mysql_get_node_bonus_remain(pool, address))
+    if amount is None: request['result'].update(MSG['TOO_LESS_TO_WITHDRAW']);return
+    n = await mysql_get_node_withdraw_count(pool, address)
+    if 0 == n: request['result'].update(MSG['WAIT_LAST_WITHDRAW_FINISH']);return
     result  = await mysql_node_update_withdraw(pool, address, amount)
     if not result:
         request['result'].update(MSG['WITHDRAW_FAILURE']);return

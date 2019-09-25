@@ -49,4 +49,7 @@ MSG = {
         "WITHDRAW_FAILURE":         {"code":646,"message":"withdraw failure"},
         "NONE_UTXO_TO_USE":         {"code":647,"message":"there is no utxos to use"},
         "TRANSACTION_BROADCAST_FAILURE":      {"code":648,"message":"transaction broadcast failure"},
+        "TOO_LESS_TO_WITHDRAW":      {"code":649,"message":"remain too less to withdraw"},
+        "WAIT_LAST_WITHDRAW_FINISH": {"code":650,"message":"please wait last withdraw operation finish"},
+
         }

@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS node_withdraw (
   timepoint INT UNSIGNED NOT NULL,
   status TINYINT UNSIGNED DEFAULT 0 NOT NULL, #0未发起交易 1交易未确认 2交易已确认
   PRIMARY KEY (id),
-  INDEX idx_address_timepoint(address, timepoint)
+  INDEX idx_address_status_timepoint(address, status, timepoint)
 );
 
 CREATE TABLE IF NOT EXISTS node_update (
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS node_used_txid (
 CREATE TABLE IF NOT EXISTS node_update_history (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) NOT NULL,
-  operation TINYINT UNSIGNED NOT NULL, #1新节点 2解锁 3提取 4签到 5旧节点激活
+  operation TINYINT UNSIGNED NOT NULL, #1请求新节点 2请求解锁 3请求提取 4请求签到 5请求旧节点激活 6到期退出 7解锁成功
   referrer VARCHAR(34) DEFAULT '' NOT NULL,
   amount VARCHAR(40) DEFAULT '0' NOT NULL,
   days SMALLINT UNSIGNED DEFAULT 0 NOT NULL,
@@ -92,5 +92,6 @@ CREATE TABLE IF NOT EXISTS node_update_history (
   txid VARCHAR(64) DEFAULT '' NOT NULL,
   timepoint INT UNSIGNED NOT NULL,
   status SMALLINT DEFAULT 0 NOT NULL, #0表示失败，1成功
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  INDEX idx_address_timepoint(address, timepoint)
 );
