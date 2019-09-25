@@ -154,7 +154,7 @@ class TestBonus(unittest.TestCase):
         await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
         address2 = rand_string(34)
         await insert_node(address2, 0, address, 2, 1000, 30, now+1, 1, '0'*96)
-        await doBonus(2)
+        await doBonus(3)
 
         node1 = await get_node_by_address(address)
         self.assertIsNotNone(node1)
@@ -243,7 +243,7 @@ class TestBonus(unittest.TestCase):
         await bonus.prepare_status(now)
         address = rand_string(34)
         await insert_node(address, 0, rand_string(34), 1, 1000, 30, now+1, 1, '0'*96)
-        await doBonus(2)
+        await doBonus(3)
 
         await insert_node_update(address, 3, amount='1')
         await bonus.handle_node_updates()
