@@ -377,6 +377,7 @@ class DB:
 
     async def get_tx_history_by_txid(self, txid):
         '''获取交易历史'''
+        if 64 == len(txid): txid = '0x' + txid
         sql = "SELECT operation,address,value,asset FROM history WHERE txid='{}';".format(txid)
         results = await self.mysql_query_many(sql)
         histories = []

@@ -422,8 +422,7 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     pool = request.app['pool']
     #broadcast
     tx = Tool.get_transaction(publicKey, signature, transaction)
-    #result,msg = await send_raw_transaction(tx, request)
-    result,msg = True,'' #test
+    result,msg = await send_raw_transaction(tx, request)
     if result:
         await mysql_freeze_utxo(request, txid)
         r= await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
@@ -460,6 +459,7 @@ async def node_history_bonus(net, address, request, *, index=0, length=100):
     index, length = info['index'], info['length']
     pool = request.app['pool']
     s = await mysql_get_node_status(pool, address)
+    if s is None: request['result'].update(MSG['NODE_NOT_EXIST']);return
     nodelevel = s['nodelevel']
     fee_rate = FEES[nodelevel]
     if s is None: request['result'].update(MSG['NODE_NOT_EXIST']);return

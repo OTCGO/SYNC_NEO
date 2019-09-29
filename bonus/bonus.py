@@ -2,8 +2,6 @@ import asyncio
 import time
 from datetime import datetime
 from logzero import logger
-import requests
-
 from db import DB
 from config import Config as C
 from node import Node, encode_advance_area_table, encode_advance_bonus_table

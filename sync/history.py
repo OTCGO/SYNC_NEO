@@ -148,10 +148,10 @@ class History(Crawler):
                                 from_sh = n['state']['value'][1]['value']
                                 if from_sh:
                                     from_address = self.scripthash_to_address(from_sh)
-                                    if self.validate_address(from_address): svins.append([asset, txid, i, from_address, value, block_time])
+                                    if self.validate_address(from_address): svins.append([asset, txid, i+len(utxos), from_address, value, block_time])
                                 to_sh = n['state']['value'][2]['value']
                                 to_address = self.scripthash_to_address(to_sh)
-                                if self.validate_address(to_address): svouts.append([asset, txid, i, to_address, value, block_time])
+                                if self.validate_address(to_address): svouts.append([asset, txid, i+len(voutx), to_address, value, block_time])
                     
         if gvins:
             await asyncio.wait([self.update_a_gvin(*vin) for vin in gvins])

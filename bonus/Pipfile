@@ -1,4 +1,5 @@
 [[source]]
+
 name = "pypi"
 url = "https://pypi.org/simple"
 verify_ssl = true
@@ -13,6 +14,7 @@ python-dotenv = "*"
 logzero = "*"
 pymongo = "*"
 "base58" = "*"
+aiomysql = "*"
 
 
 [dev-packages]
