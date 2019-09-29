@@ -7,14 +7,13 @@ verify_ssl = true
 
 [packages]
 
-motor = "*"
 aiohttp = "*"
 uvloop = "*"
 python-dotenv = "*"
 logzero = "*"
-pymongo = "*"
 "base58" = "*"
 aiomysql = "*"
+bitcoin = "*"
 
 
 [dev-packages]

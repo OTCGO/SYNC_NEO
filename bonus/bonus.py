@@ -260,6 +260,8 @@ class Bonus:
                         'status': -1,
                         'signin': 0,
                         'nextbonustime': node_bonus_timepoint+2*C.get_bonus_interval(),
+                        'nodelevel': Node.init_node_level(int(up['amount'])),
+                        'penalty': Node.compute_penalty(int(up['amount']), up['days']),
                         'layer':layer,
                         'starttime': int(time.time()),
                         'bonusadvancetable': encode_advance_bonus_table(Node.zero_advance_bonus_table()),

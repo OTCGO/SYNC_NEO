@@ -113,6 +113,34 @@ class Node:
 
     children = []  #子节点
 
+    @staticmethod
+    def compute_penalty(amount, days):
+        if 1000 == amount:
+            if 30 == days: return 0     # 0%
+            if 90 == days: return 80    # 8%
+            if 180 == days: return 130  # 13%
+            if 360 == days: return 230  # 23%
+        if 3000 == amount:
+            if 30 == days: return 180   # 6%
+            if 90 == days: return 270   # 9%
+            if 180 == days: return 420  # 14%
+            if 360 == days: return 780  # 26%
+        if 5000 == amount:
+            if 30 == days: return 350   # 7%
+            if 90 == days: return 500   # 10%
+            if 180 == days: return 750  # 15%
+            if 360 == days: return 1500 # 30%
+        if 10000 == amount:
+            if 30 == days: return 800   # 8%
+            if 90 == days: return 1100  # 11%
+            if 180 == days: return 1800 # 18%
+            if 360 == days: return 3600 # 36%
+        raise ValueError("Wrong amount and days %s - %s".format(amount, days))
+    
+    @staticmethod
+    def init_node_level(amount):
+        return [1000,3000,5000,10000].index(amount)+1
+
     def set_children(self, children):
         self.children = children
 
