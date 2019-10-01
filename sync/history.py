@@ -141,10 +141,12 @@ class History(Crawler):
                                     isinstance(n['state']['value'],list) and \
                                     4 == len(n['state']['value']) and \
                                     '7472616e73666572' == n['state']['value'][0]['value']:
+                                decimals = await self.get_cache_decimals(asset)
+                                if decimals is None: continue
                                 if 'Integer' == n['state']['value'][3]['type']:
-                                    value = self.integer_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                    value = self.integer_to_num_str(n['state']['value'][3]['value'], decimals=decimals)
                                 else:
-                                    value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=await self.get_cache_decimals(asset))
+                                    value = self.hex_to_num_str(n['state']['value'][3]['value'], decimals=decimals)
                                 from_sh = n['state']['value'][1]['value']
                                 if from_sh:
                                     from_address = self.scripthash_to_address(from_sh)

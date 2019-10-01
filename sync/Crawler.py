@@ -325,7 +325,7 @@ class Crawler:
                 return int(d['stack'][0]['value'])
             return 0
         logger.error('Can not get the decimals of {}'.format(contract))
-        sys.exit(1)
+        return None
 
     async def get_nep5_balance(self, contract, address):
         d = await self.get_invokefunction_with_extra_arg(contract, 'balanceOf', [{'type':'Hash160','value':CT.big_or_little(self.address_to_scripthash(address))}])

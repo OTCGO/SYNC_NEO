@@ -197,7 +197,7 @@ class DB:
 
     async def get_nodes_by_status(self, status):
         '''根据状态查出节点'''
-        sql = "SELECT id,txid,address,amount FROM node WHERE status = %s;" % status
+        sql = "SELECT id,txid,address,amount,refundtxid,penalty FROM node WHERE status = %s;" % status
         results = await self.mysql_query_many(sql)
         nodes = []
         for r in results:
@@ -206,6 +206,8 @@ class DB:
             node['txid'] = r[1]
             node['address'] = r[2]
             node['amount'] = r[3]
+            node['refundtxid'] = r[4]
+            node['penalty'] = r[5]
             nodes.append(node)
         return nodes
 
@@ -404,3 +406,33 @@ class DB:
 
         sql = "INSERT INTO node_update_history({}) VALUES ({});".format(','.join(fields), ','.join(values))
         await self.mysql_insert_one(sql)
+
+    async def get_node_withdraws_by_status(self, status):
+        '''根据状态查出提现记录'''
+        sql = "SELECT id,txid,address,amount FROM node_withdraw WHERE status = %s;" % status
+        results = await self.mysql_query_many(sql)
+        nodes = []
+        for r in results:
+            node = {}
+            node['id'] = r[0]
+            node['txid'] = r[1]
+            node['address'] = r[2]
+            node['amount'] = r[3]
+            nodes.append(node)
+        return nodes
+
+    async def update_node_withdraw_by_id(self, node_dict):
+        '''更新提现记录'''
+        update_fields = []
+        for k in node_dict:
+            if k == 'id':
+                continue
+            if isinstance(node_dict[k], str):
+                update_fields.append("{}='{}'".format(k, node_dict[k]))
+            else:
+                update_fields.append("{}={}".format(k, node_dict[k]))
+
+        sql = "UPDATE node_withdraw SET {} WHERE id = {};".format(','.join(update_fields), node_dict['id'])
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
