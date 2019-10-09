@@ -259,7 +259,7 @@ class Bonus:
                         'txid': up['txid'],
                         'status': -1,
                         'signin': 0,
-                        'nextbonustime': node_bonus_timepoint+2*C.get_bonus_interval(),
+                        'nextbonustime': node_bonus_timepoint+C.get_bonus_interval(),
                         'nodelevel': Node.init_node_level(int(up['amount'])),
                         'penalty': Node.compute_penalty(int(up['amount']), up['days']),
                         'layer':layer,
@@ -289,7 +289,9 @@ class Bonus:
                         'txid': up['txid'],
                         'status': -1,
                         'signin': 0,
-                        'nextbonustime': node_bonus_timepoint + 2 * C.get_bonus_interval(),
+                        'nodelevel': Node.init_node_level(int(up['amount'])),
+                        'penalty': Node.compute_penalty(int(up['amount']), up['days']),
+                        'nextbonustime': node_bonus_timepoint + C.get_bonus_interval(),
                     })
                     up['status'] = 1
                 else:

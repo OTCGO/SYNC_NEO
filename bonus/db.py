@@ -284,15 +284,16 @@ class DB:
     async def add_node_bonus(self, node, bonus_time):
         '''增加分红记录，并更新节点状态'''
         if node.can_bonus(bonus_time): #增加分红记录
-            amount = node.locked_bonus + node.team_bonus + node.referrals_bonus + node.signin_bonus
+            amount = round(node.locked_bonus + node.team_bonus + node.referrals_bonus + node.signin_bonus, 3)
             total, remain = amount, amount
             # 先找出最新的分红记录
             prev_bonus_record = await self.get_lastest_node_bonus(node.address)
             add = True
             if prev_bonus_record:
-                if prev_bonus_record['bonus_time'] + C.get_bonus_interval() == bonus_time:
-                    total += float(prev_bonus_record['total'])
-                    remain += float(prev_bonus_record['remain'])
+                delta = bonus_time - prev_bonus_record['bonus_time']
+                if delta > 0 and delta % C.get_bonus_interval() == 0:
+                    total = round(total + float(prev_bonus_record['total']), 3)
+                    remain = round(remain + float(prev_bonus_record['remain']), 3)
                 else:
                     add = False
                     logger.warning("you are going to add bonus for bonus_time({}), but prev bonus_time({}) is not the right time".format(bonus_time, prev_bonus_record['bonus_time']))

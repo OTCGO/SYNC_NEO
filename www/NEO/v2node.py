@@ -20,13 +20,41 @@ from message import MSG
 
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
 #RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
-RECEIVE = 'Acs3FHua5pTUVrJjdYEZRR7j86YvDejc4h' #test
+RECEIVE = 'AewNjj9is8VEHAZSXJfKk7FbsrWCJQvwZc' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
 OPERATION_REACTIVE_NODE = 5
 UPDATE_STATUS={1:"NODE_CREATING",2:"NODE_UNLOCKING",3:"NODE_WITHDRAWING",4:"NODE_SIGNING",5:"NODE_REACTIVING"}
 FEES = {1:'0.05',2:'0.05',3:'0.05',4:'0.05',5:'0.045',6:'0.04',7:'0.035',8:'0.03',9:'0.025'}
 MIN_WITHDRAW_FEE = 5
+
+def compute_daily_lockedbonus(amount, days):
+    if 1000 == amount:
+        if 30 == days: return '1.64'
+        if 90 == days: return '2.05'
+        if 180 == days: return '2.73'
+        if 360 == days: return '3.97'
+    if 3000 == amount:
+        if 30 == days: return '5.75'
+        if 90 == days: return '7.39'
+        if 180 == days: return '10.27'
+        if 360 == days: return '14.37'
+    if 5000 == amount:
+        if 30 == days: return '11.23'
+        if 90 == days: return '15.06'
+        if 180 == days: return '20.54'
+        if 360 == days: return '28.76'
+    if 10000 == amount:
+        if 30 == days: return '26.29'
+        if 90 == days: return '35.61'
+        if 180 == days: return '49.31'
+        if 360 == days: return '68.49'
+    raise ValueError("Wrong amount and days %s - %s".format(amount, days))
+
+def compute_daily_signinbonus(amount, days):
+    daily_lockedbonus = compute_daily_lockedbonus(amount, days)
+    daily_signinbonus = D(daily_lockedbonus) * D('0.1')
+    return str(daily_signinbonus.quantize(D('0.00')))
 
 
 def valid_net(net, request):
@@ -217,6 +245,10 @@ async def get_node_info_from_cache(request, address):
     if cache.has(address): return cache.get(address)
     return None
 
+async def delete_node_info_from_cache(request, address):
+    cache = request.app['cache']
+    cache.delete(address)
+
 async def mysql_freeze_utxo(request, txid):
     cache = request.app['cache']
     utxos = cache.get(txid, [])
@@ -227,64 +259,12 @@ async def mysql_freeze_utxo(request, txid):
         await asyncio.gather(*[mysql_insert_one(pool, sql % d) for d in data])
         cache.delete(txid)
 
-def compute_penalty(amount, days):
-    if 1000 == amount:
-        if 30 == days: return 0     # 0%
-        if 90 == days: return 80    # 8%
-        if 180 == days: return 130  # 13%
-        if 360 == days: return 230  # 23%
-    if 3000 == amount:
-        if 30 == days: return 180   # 6%
-        if 90 == days: return 270   # 9%
-        if 180 == days: return 420  # 14%
-        if 360 == days: return 780  # 26%
-    if 5000 == amount:
-        if 30 == days: return 350   # 7%
-        if 90 == days: return 500   # 10%
-        if 180 == days: return 750  # 15%
-        if 360 == days: return 1500 # 30%
-    if 10000 == amount:
-        if 30 == days: return 800   # 8%
-        if 90 == days: return 1100  # 11%
-        if 180 == days: return 1800 # 18%
-        if 360 == days: return 3600 # 36%
-    raise ValueError("Wrong amount and days %s - %s".format(amount, days))
-
-def compute_daily_lockedbonus(amount, days):
-    if 1000 == amount:
-        if 30 == days: return '1.64'
-        if 90 == days: return '2.05'
-        if 180 == days: return '2.73'
-        if 360 == days: return '3.97'
-    if 3000 == amount:
-        if 30 == days: return '5.75'
-        if 90 == days: return '7.39'
-        if 180 == days: return '10.27'
-        if 360 == days: return '14.37'
-    if 5000 == amount:
-        if 30 == days: return '11.23'
-        if 90 == days: return '15.06'
-        if 180 == days: return '20.54'
-        if 360 == days: return '28.76'
-    if 10000 == amount:
-        if 30 == days: return '26.29'
-        if 90 == days: return '35.61'
-        if 180 == days: return '49.31'
-        if 360 == days: return '68.49'
-    raise ValueError("Wrong amount and days %s - %s".format(amount, days))
-
-def compute_daily_signinbonus(amount, days):
-    daily_lockedbonus = compute_daily_lockedbonus(amount, days)
-    daily_signinbonus = D(daily_lockedbonus) * D('0.1')
-    return str(daily_signinbonus.quantize(D('0.00')))
-
 def get_now_timepoint():
     return str(time.mktime(datetime.datetime.now().timetuple())).split('.')[0]
 
 async def mysql_node_update_new_node(pool, address, referrer, amount, days, txid, operation):
-    penalty = compute_penalty(int(amount), int(days))
     timepoint = get_now_timepoint()
-    sql = "INSERT INTO node_update(address,operation,referrer,amount,days,penalty,txid,timepoint) VALUES ('%s',%s,'%s','%s',%s,%s,'%s',%s)" % (address,operation,referrer,amount,days,penalty,txid,timepoint)
+    sql = "INSERT INTO node_update(address,operation,referrer,amount,days,txid,timepoint) VALUES ('%s',%s,'%s','%s',%s,'%s',%s)" % (address,operation,referrer,amount,days,txid,timepoint)
     n = await mysql_insert_one(pool, sql)
     if n: return True
     return False
@@ -349,6 +329,8 @@ async def send_raw_transaction(tx, request):
 @get('/v2/{net}/node/status/{address}')
 async def node_status(net, address, request):
     pool = request.app['pool']
+    aeu = await mysql_query_node_update_exist(pool, address)
+    if aeu and aeu == 'NODE_CREATING': request['result'].update(MSG[aeu]);return
     s = await mysql_get_node_status(pool, address)
     if s is None:
         request['result'].update(MSG['NODE_NOT_EXIST'])
@@ -430,6 +412,7 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
             request['result'].update(MSG['TRANSACTION_BROADCAST_FAILURE'])
             request['result']['message'] += ':' + msg
             return 
+        await delete_node_info_from_cache(request, address)
         request['result']['data'] = {'txid':txid};return
 
 @format_result(['net'])
