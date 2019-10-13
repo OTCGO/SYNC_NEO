@@ -102,6 +102,7 @@ class Node:
     burned = 0 #是否烧伤
     small_area_burned = 0 #小区烧伤
     signin = 0 #签到
+    level_change = 0
 
     need_updated = False # 是否需要更新
 
@@ -243,6 +244,12 @@ class Node:
             level = 1
         else:
             level = 0
+        if self.level == level:
+            self.level_change = 0
+        elif self.level < level:
+            self.level_change = 1
+        else:
+            self.level_change = 2
         if self.level != level:
             self.need_updated = True
         self.level = level

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS node (
   signin TINYINT UNSIGNED DEFAULT 0 NOT NULL, #0未签到 1签到
   bonusadvancetable TEXT,
   areaadvancetable LONGTEXT,
+  levelchange INT DEFAULT 0 NOT NULL, #0 无变化 1 升级, 2降级
   PRIMARY KEY (id),
   INDEX idx_referrer_address(referrer, address),
   INDEX idx_layer_nextbonustime_status(layer, nextbonustime, status)
