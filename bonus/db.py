@@ -438,3 +438,17 @@ class DB:
         conn, _ = await self.mysql_execute(sql)
         if conn:
             await self.pool.release(conn)
+
+    async def del_node_bonus_by_address(self, address):
+        '''删除地址分红记录'''
+        sql = "DELETE FROM node_bonus WHERE address='{}';".format(address)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)
+
+    async def del_node_withdraw_by_address(self, address):
+        '''删除地址提现记录'''
+        sql = "DELETE FROM node_withdraw WHERE address='{}';".format(address)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)

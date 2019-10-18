@@ -1,5 +1,7 @@
 import asyncio
 import time
+from decimal import Decimal as D
+from decimal import ROUND_DOWN
 from datetime import datetime
 from logzero import logger
 from db import DB
@@ -273,8 +275,9 @@ class Bonus:
                 await self.db.update_node_by_address({'address': up['address'], 'status': -5})
                 up['status'] = 1
             elif op == 3: #提取
-                await self.withdraw_bonus(up['address'], up['amount'])
-                up['status'] = 1
+                s = await self.withdraw_bonus(up['address'], up['amount'])
+                if s is None: up['status'] = 0
+                else: up['status'] = 1
             elif op == 4: #签到
                 await self.db.update_node_by_address({'address': up['address'], 'signin': 1})
                 up['status'] = 1
@@ -307,9 +310,13 @@ class Bonus:
         last = await self.db.get_lastest_node_bonus(address)
         if not last:
             logger.warning("[WITHDRAW] no any node_bonus for address: {}".format(address))
-            return
-        remain = float(last['remain'])
-        remain = (remain-float(amount)) if remain > float(amount) else 0
+            return None
+        remain = D(last['remain'])
+        amount = D(amount)
+        if amount > remain:
+            logger.warning("[WITHDRAW] address({}) withdraw amount({}) can't bigger than remain({})".format(address,amount,remain))
+            return None
+        remain = (remain - amount).quantize(D('0.001'), rounding=ROUND_DOWN)
         node_bonus  = {
             "id": last['id'],
             "remain": str(remain)
@@ -319,12 +326,13 @@ class Bonus:
         node_withdraw = {
             'address': address,
             'txid': '',
-            'amount': amount,
+            'amount': str(amount),
             'timepoint': int(time.time()),
             'status': 0
         }
         #增加收益记录
         await self.db.insert_node_withdraw(node_withdraw)
+        return True
 
     async def start(self):
         '''开始执行'''

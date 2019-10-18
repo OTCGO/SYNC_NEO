@@ -96,3 +96,11 @@ CREATE TABLE IF NOT EXISTS node_update_history (
   PRIMARY KEY (id),
   INDEX idx_address_timepoint(address, timepoint)
 );
+
+CREATE TABLE IF NOT EXISTS node_price (
+  id INT UNSIGNED AUTO_INCREMENT,
+  asset CHAR(40) UNIQUE NOT NULL,
+  price VARCHAR(40) DEFAULT '0' NOT NULL,
+  timepoint INT UNSIGNED NOT NULL,
+  PRIMARY KEY (id)
+);

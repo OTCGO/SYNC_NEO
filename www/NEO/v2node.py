@@ -19,6 +19,7 @@ from message import MSG
 
 
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
+SEAS = 'de7be47c4c93f1483a0a3fff556a885a68413d97'
 #RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
 RECEIVE = 'AewNjj9is8VEHAZSXJfKk7FbsrWCJQvwZc' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
@@ -27,6 +28,7 @@ OPERATION_REACTIVE_NODE = 5
 UPDATE_STATUS={1:"NODE_CREATING",2:"NODE_UNLOCKING",3:"NODE_WITHDRAWING",4:"NODE_SIGNING",5:"NODE_REACTIVING"}
 FEES = {1:'0.05',2:'0.05',3:'0.05',4:'0.05',5:'0.045',6:'0.04',7:'0.035',8:'0.03',9:'0.025'}
 MIN_WITHDRAW_FEE = 5
+PRICE_PRE = 'PRICE_'
 
 def compute_daily_lockedbonus(amount, days):
     if 1000 == amount:
@@ -245,6 +247,19 @@ async def get_node_info_from_cache(request, address):
     if cache.has(address): return cache.get(address)
     return None
 
+async def get_cache_price(request, asset):
+    cache = request.app['cache']
+    if cache.has(PRICE_PRE + asset): return cache.get(PRICE_PRE + asset)
+    pool = request.app['pool']
+    price = await mysql_get_node_price(pool, asset)
+    cache.set(PRICE_PRE + asset, price, ttl=60)
+
+async def mysql_get_node_price(pool, asset):
+    sql = "SELECT price FROM node_price WHERE asset='%s';" % (asset)
+    r = await mysql_query_one(pool, sql)
+    if r: return r[0][0]
+    return '0'
+
 async def delete_node_info_from_cache(request, address):
     cache = request.app['cache']
     cache.delete(address)
@@ -330,7 +345,7 @@ async def send_raw_transaction(tx, request):
 async def node_status(net, address, request):
     pool = request.app['pool']
     aeu = await mysql_query_node_update_exist(pool, address)
-    if aeu and aeu == 'NODE_CREATING': request['result'].update(MSG[aeu]);return
+    if aeu: request['result'].update(MSG[aeu]);return
     s = await mysql_get_node_status(pool, address)
     if s is None:
         request['result'].update(MSG['NODE_NOT_EXIST'])
@@ -344,6 +359,10 @@ async def node_status(net, address, request):
             if status !=0:static_total = D(daily_lockedbonus)*status
         s['static_total'] = str(static_total)
         s['static_all'] = str(static_all)
+        static_remain = static_all - static_total
+        seas_price = await get_cache_price(request, SEAS)
+        s['static_remain_cny'] = str((static_remain*D(seas_price)).quantize(D('.001'), rounding=ROUND_DOWN))
+        s['static_remain'] = str(static_remain)
         request['result']['data'] = s
 
 @format_result(['net'])
