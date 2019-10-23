@@ -316,7 +316,7 @@ class DB:
         update_field['burned'] = node.burned
         update_field['signin'] = node.signin
         update_field['smallareaburned'] = node.small_area_burned
-        update_field['level_change'] = node.level_change
+        update_field['levelchange'] = node.level_change
 
         if up_status:
             update_field['status'] = node.status+1

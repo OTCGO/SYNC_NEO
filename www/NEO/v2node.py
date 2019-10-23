@@ -19,7 +19,6 @@ from message import MSG
 
 
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
-SEAS = 'de7be47c4c93f1483a0a3fff556a885a68413d97'
 #RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
 RECEIVE = 'AewNjj9is8VEHAZSXJfKk7FbsrWCJQvwZc' #test
 AMOUNTS = ['1000', '3000', '5000', '10000']
@@ -123,7 +122,7 @@ async def mysql_query_one(pool, sql):
         await pool.release(conn)
 
 async def mysql_get_node_status(pool, address):
-    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,smallareaburned,signin FROM node WHERE address = '%s';" % address
+    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,smallareaburned,signin,levelchange FROM node WHERE address = '%s';" % address
     r = await mysql_query_one(pool, sql)
     if r: return {
                 'status':r[0][0],
@@ -137,7 +136,8 @@ async def mysql_get_node_status(pool, address):
                 'teamlevelinfo':r[0][8],
                 'burned':r[0][9],
                 'smallareaburned':r[0][10],
-                'signin':r[0][11]
+                'signin':r[0][11],
+                'levelchange':r[0][12],
                 }
     return None
 
@@ -247,18 +247,10 @@ async def get_node_info_from_cache(request, address):
     if cache.has(address): return cache.get(address)
     return None
 
-async def get_cache_price(request, asset):
+async def get_cache_seas_price(request):
+    seas = 'de7be47c4c93f1483a0a3fff556a885a68413d97'
     cache = request.app['cache']
-    if cache.has(PRICE_PRE + asset): return cache.get(PRICE_PRE + asset)
-    pool = request.app['pool']
-    price = await mysql_get_node_price(pool, asset)
-    cache.set(PRICE_PRE + asset, price, ttl=60)
-
-async def mysql_get_node_price(pool, asset):
-    sql = "SELECT price FROM node_price WHERE asset='%s';" % (asset)
-    r = await mysql_query_one(pool, sql)
-    if r: return r[0][0]
-    return '0'
+    return cache.get(PRICE_PRE + seas)
 
 async def delete_node_info_from_cache(request, address):
     cache = request.app['cache']
@@ -360,8 +352,9 @@ async def node_status(net, address, request):
         s['static_total'] = str(static_total)
         s['static_all'] = str(static_all)
         static_remain = static_all - static_total
-        seas_price = await get_cache_price(request, SEAS)
-        s['static_remain_cny'] = str((static_remain*D(seas_price)).quantize(D('.001'), rounding=ROUND_DOWN))
+        seas_price = await get_cache_seas_price(request)
+        if seas_price: s['static_remain_cny'] = str((static_remain*D(seas_price)).quantize(D('.001'), rounding=ROUND_DOWN))
+        else: s['static_remain_cny'] = '0'
         s['static_remain'] = str(static_remain)
         request['result']['data'] = s
 
