@@ -103,6 +103,7 @@ class Node:
     small_area_burned = 0 #小区烧伤
     signin = 0 #签到
     level_change = 0
+    team_cur_level_count = 0
 
     need_updated = False # 是否需要更新
 
@@ -417,6 +418,28 @@ class Node:
             all['big'].extend(info['big'])
 
         return all
+
+    def compute_team_cur_level_count(self):
+        '''计算旗下当前等级的星级数量，区分路线'''
+        count = 0
+        if self.level < 6:
+            self.team_cur_level_count = 0
+            return 0
+        for child in self.children:
+            if child.can_compute_in_team() and child.level == self.level:
+                count += 1
+                continue
+            f = False
+            team_level_dict = child.get_team_level_info()
+            for k in team_level_dict.keys():
+                # 判断直推人的旗下是否满足等级要求
+                if k == self.level and team_level_dict[k] > 0:
+                    f = True
+                    break
+            if f:
+                count += 1
+        self.team_cur_level_count = count
+        return count
 
     @staticmethod
     def zero_advance_bonus_table():

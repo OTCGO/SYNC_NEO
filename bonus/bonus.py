@@ -58,6 +58,8 @@ class Bonus:
             nodes[i].compute_team_level()
             # 计算节点等级
             nodes[i].compute_level()
+            # 计算旗下当前等级的星级数量，区分路线
+            nodes[i].compute_team_cur_level_count()
             # 团队业绩分红
             if nodes[i].can_bonus(bonus_time):
                 burned, small_area_burned, nodes[i].team_bonus = self.compute_team_bonus(nodes[i])

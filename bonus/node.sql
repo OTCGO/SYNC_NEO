@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS node (
   bonusadvancetable TEXT,
   areaadvancetable LONGTEXT,
   levelchange INT DEFAULT 0 NOT NULL, #0 无变化 1 升级, 2降级
+  teamcurlevelcount INT DEFAULT 0 NOT NULL,
   PRIMARY KEY (id),
   INDEX idx_referrer_address(referrer, address),
   INDEX idx_layer_nextbonustime_status(layer, nextbonustime, status)
