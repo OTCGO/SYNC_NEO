@@ -122,7 +122,7 @@ async def mysql_query_one(pool, sql):
         await pool.release(conn)
 
 async def mysql_get_node_status(pool, address):
-    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,smallareaburned,signin,levelchange FROM node WHERE address = '%s';" % address
+    sql = "SELECT status,referrer,amount,days,referrals,performance,nodelevel,penalty,teamlevelinfo,burned,smallareaburned,signin,levelchange,teamcurlevelcount FROM node WHERE address = '%s';" % address
     r = await mysql_query_one(pool, sql)
     if r: return {
                 'status':r[0][0],
@@ -138,6 +138,7 @@ async def mysql_get_node_status(pool, address):
                 'smallareaburned':r[0][10],
                 'signin':r[0][11],
                 'levelchange':r[0][12],
+                'teamcurlevelcount':r[0][13],
                 }
     return None
 
@@ -386,13 +387,14 @@ async def node_new(net, request, *, referrer, amount, days, publicKey, signature
     fee = D('0.001')
     fee_utxos = []
     freeze_utxos = []
+    gas_address = request.app['gasaddress']
     balance = D(await mysql_get_nep5_asset_balance(pool, address, SEAC))
     if balance < D(amount): request['result'].update(MSG['INSUFFICIENT_BALANCE']);return
     transaction = Tool.transfer_nep5(SEAC, address, RECEIVE, D(amount))
-    fee_utxos = await mysql_get_utxo(pool, address, GAS[2:])
+    fee_utxos = await mysql_get_utxo(pool, gas_address, GAS[2:])
     fee_balance = sum([D(i['value']) for i in fee_utxos])
     if fee_balance < fee: request['result'].update(MSG['INSUFFICIENT_FEE']);return
-    fee_transaction,spent_utxos,msg = Tool.transfer_global_with_fee(address, [], [], '', fee, fee_utxos, GAS[2:])
+    fee_transaction,spent_utxos,msg = Tool.transfer_global_with_fee(gas_address, [], [], '', fee, fee_utxos, GAS[2:])
     if spent_utxos: freeze_utxos.extend(spent_utxos)
     else: request['result'].update(MSG['NONE_UTXO_TO_USE']);return 
     transaction = transaction[0:-4] + fee_transaction[6:]
@@ -415,17 +417,23 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     if txid != Tool.compute_txid(transaction): request['result'].update(MSG['WRONG_ARGUMENT_TRANSACTION']);return
     pool = request.app['pool']
     #broadcast
-    tx = Tool.get_transaction(publicKey, signature, transaction)
+    gas_prikey = request.app['gasprikey']
+    gas_pubkey = request.app['gaspubkey']
+    gas_sig = Tool.sign(transaction, gas_prikey)
+    tx = Tool.get_transaction_multi_normal_address([publicKey,gas_pubkey],[signature,gas_sig], transaction)
     result,msg = await send_raw_transaction(tx, request)
     if result:
         await mysql_freeze_utxo(request, txid)
         r= await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
         if not r:
-            request['result'].update(MSG['TRANSACTION_BROADCAST_FAILURE'])
+            request['result'].update(MSG['NODE_WAIT_PROCESS'])
             request['result']['message'] += ':' + msg
             return 
         await delete_node_info_from_cache(request, address)
         request['result']['data'] = {'txid':txid};return
+    else:
+        request['result'].update(MSG['TRANSACTION_BROADCAST_FAILURE'])
+        request['result']['message'] += ':' + msg
 
 @format_result(['net'])
 @post('/v2/{net}/node/unlock')

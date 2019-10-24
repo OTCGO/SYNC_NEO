@@ -110,6 +110,11 @@ class Tool:
         return cls.bin_hash160(redeem)
 
     @classmethod
+    def redeemhex_to_scripthash(cls, redeem):
+        '''turn scripthash to little edition'''
+        return big_or_little(cls.redeem_to_scripthash(binascii.unhexlify(redeem)))
+
+    @classmethod
     def scripthash_to_address(cls, sh):
         tmp = binascii.unhexlify('17' + sh.hex())
         tmp = b58encode(tmp + cls.hash256(tmp)[:4])
@@ -350,6 +355,18 @@ class Tool:
     @staticmethod
     def get_transaction(cpubkey, signature, transaction):
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
+
+    @classmethod
+    def get_transaction_multi_normal_address(cls, pubkeys, sigs, transaction):
+        redeemhexs = ['21'+pk+'ac' for pk in pubkeys]
+        redeemdict = dict(zip(redeemhexs, sigs))
+        sorted_redeems = sorted(redeemhexs, key=cls.redeemhex_to_scripthash)
+        len_pubkeys = hex(len(pubkeys))[2:]
+        if len(len_pubkeys)%2 == 1: len_pubkeys = '0' + len_pubkeys
+        transaction += len_pubkeys
+        for r in sorted_redeems:
+            transaction += '4140' + redeemdict[r] + '23' + r
+        return transaction
 
     @staticmethod
     def get_transaction_for_swap_seas(cpubkey, signature, transaction):
