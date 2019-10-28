@@ -453,3 +453,10 @@ class DB:
         conn, _ = await self.mysql_execute(sql)
         if conn:
             await self.pool.release(conn)
+
+    async def del_node_signature_by_address(self, address):
+        '''删除地址签名'''
+        sql = "DELETE FROM node_signature WHERE address='{}';".format(address)
+        conn, _ = await self.mysql_execute(sql)
+        if conn:
+            await self.pool.release(conn)

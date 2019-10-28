@@ -424,14 +424,15 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
     result,msg = await send_raw_transaction(tx, request)
     if result:
         await mysql_freeze_utxo(request, txid)
+        await delete_node_info_from_cache(request, address)
         r= await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
         if not r:
             request['result'].update(MSG['NODE_WAIT_PROCESS'])
             request['result']['message'] += ':' + msg
             return 
-        await delete_node_info_from_cache(request, address)
         request['result']['data'] = {'txid':txid};return
     else:
+        await delete_node_info_from_cache(request, address)
         request['result'].update(MSG['TRANSACTION_BROADCAST_FAILURE'])
         request['result']['message'] += ':' + msg
 
