@@ -39,10 +39,12 @@ class UPT(Crawler):
         if 40 == len(asset):#nep5
             b = await self.get_nep5_balance(asset,address)
             if 0 == len(b['value']): return '0'
+            decimals = await self.get_cache_decimals(asset)
+            if decimals is None: return '0'
             if 'ByteArray' == b['type']:
-                return self.hex_to_num_str(b['value'], decimals=await self.get_cache_decimals(asset))
+                return self.hex_to_num_str(b['value'], decimals=decimals)
             if 'Integer' == b['type']:
-                return self.integer_to_num_str(b['value'], decimals=await self.get_cache_decimals(asset))
+                return self.integer_to_num_str(b['value'], decimals=decimals)
             sys.exit(1)
         if 64 == len(asset):#global
             asset = '0x' + asset

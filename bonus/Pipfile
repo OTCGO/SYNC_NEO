@@ -1,0 +1,21 @@
+[[source]]
+
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+
+[packages]
+
+aiohttp = "*"
+uvloop = "*"
+python-dotenv = "*"
+logzero = "*"
+"base58" = "*"
+aiomysql = "*"
+bitcoin = "*"
+
+
+[dev-packages]
+
+ipython = "*"

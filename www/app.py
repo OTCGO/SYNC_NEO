@@ -52,6 +52,15 @@ def get_ont_uri():
 def get_super_node_uri():
     return os.environ.get('SUPERNODE')
 
+def get_gas_address():
+    return os.environ.get('GASADDRESS')
+
+def get_gas_prikey():
+    return os.environ.get('GASPRIKEY')
+
+def get_gas_pubkey():
+    return os.environ.get('GASPUBKEY')
+
 get_listen_ip = lambda:os.environ.get('LISTENIP')
 get_listen_port = lambda:os.environ.get('LISTENPORT')
 get_net = lambda:os.environ.get('NET')
@@ -177,9 +186,27 @@ async def update_assets(pool, cache):
         cache.set('assets', assets)
         await pool.release(conn)
 
+async def update_seas_price(pool, cache):
+    price_pre = 'PRICE_'
+    seas = 'de7be47c4c93f1483a0a3fff556a885a68413d97'
+    conn, cur = await get_mysql_cursor(pool)
+    try:
+        sql = "SELECT price FROM node_price WHERE asset='%s';" % (seas)
+        await cur.execute(sql)
+        result = await cur.fetchone()
+        if result: price = result[0]
+        else: price = '0'
+    except Exception as e:
+        logging.error("mysql SELECT failure:{}".format(e.args[0]))
+        sys.exit(1)
+    finally:
+        cache.set(price_pre + seas, price, ttl=60)
+        await pool.release(conn)
+
 async def init_cache(app):
     await update_height(app['pool'], app['cache'])
     await update_assets(app['pool'], app['cache'])
+    await update_seas_price(app['pool'], app['cache'])
 
 async def logger_factory(app, handler):
     async def logger(request):
@@ -271,6 +298,9 @@ async def init(loop):
     app['cache'] = Cache(maxsize=0)
     await init_cache(app)
     app['ont_genesis_block_timestamp'] = get_ont_genesis_block_timestamp()
+    app['gasaddress'] = get_gas_address()
+    app['gasprikey'] = get_gas_prikey()
+    app['gaspubkey'] = get_gas_pubkey()
     scheduler = AsyncIOScheduler(job_defaults = {
                     'coalesce': True,
                     'max_instances': 1,
@@ -278,6 +308,7 @@ async def init(loop):
     scheduler.add_job(update_height, 'interval', seconds=2, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
     #scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
     scheduler.add_job(update_assets, 'interval', seconds=120, args=[app['pool'], app['cache']], id='update_assets', timezone=utc)
+    scheduler.add_job(update_seas_price, 'interval', seconds=20, args=[app['pool'], app['cache']], id='update_seas_price', timezone=utc)
     scheduler._logger = logging
     scheduler.start()
     add_routes(app, 'handlers')
