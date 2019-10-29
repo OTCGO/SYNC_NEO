@@ -357,15 +357,19 @@ class Tool:
         return transaction + '014140' + signature + '2321' + cpubkey + 'ac'
 
     @classmethod
-    def get_transaction_multi_normal_address(cls, pubkeys, sigs, transaction):
+    def get_transaction_multi_normal_address(cls, pubkeys, sigs, transaction, reverse=False):
         redeemhexs = ['21'+pk+'ac' for pk in pubkeys]
         redeemdict = dict(zip(redeemhexs, sigs))
         sorted_redeems = sorted(redeemhexs, key=cls.redeemhex_to_scripthash)
         len_pubkeys = hex(len(pubkeys))[2:]
         if len(len_pubkeys)%2 == 1: len_pubkeys = '0' + len_pubkeys
         transaction += len_pubkeys
-        for r in sorted_redeems:
-            transaction += '4140' + redeemdict[r] + '23' + r
+        if reverse == False:
+            for r in sorted_redeems:
+                transaction += '4140' + redeemdict[r] + '23' + r
+        else:
+            for r in reversed(sorted_redeems):
+                transaction += '4140' + redeemdict[r] + '23' + r
         return transaction
 
     @staticmethod
