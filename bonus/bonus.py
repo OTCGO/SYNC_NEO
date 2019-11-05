@@ -111,14 +111,20 @@ class Bonus:
         '''计算团队分红, 保留三位小数'''
         if node.level < 5:
             return False, False, 0
+
         team_bonus = 0
+        info = node.compute_dynamic_bonus_cate()
+        if node.level == 5:
+            for k in info:
+                team_bonus += self.bonus_conf['team_bonus_rate'][node.level]*info[k]
+            return False, False, round(team_bonus, 3)
+
         small_area_burned = False #小区烧伤
         big_small_area = node.compute_big_small_area()
         if len(big_small_area['big']) > 0 and big_small_area['small'] > min(big_small_area['big'])*0.5:
             small_area_burned = True
 
         burned = False
-        info = node.compute_dynamic_bonus_cate()
         for k in info:
             if k in ['high_level', 'equal_level', 'low_one'] and info[k] > 0:
                 burned = True
