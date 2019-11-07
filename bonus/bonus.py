@@ -16,6 +16,7 @@ class Bonus:
     def __init__(self, mysql_args, bonus_conf):
         self.db = DB(mysql_args)
         self.bonus_conf = bonus_conf
+        self.show_detail_log = True
         pass
 
     async def prepare(self):
@@ -33,6 +34,10 @@ class Bonus:
                 bonus_time = time.mktime(datetime.fromtimestamp(bonus_time).date().timetuple())+10
 
             await self.db.update_status('node_bonus_timepoint', bonus_time)
+
+    def print_detail(self, msg):
+        if self.show_detail_log:
+            logger.info(msg)
 
     async def handle_by_layer(self, nodes, bonus_time, layer):
         '''处理同一层级的所有节点'''
@@ -58,11 +63,13 @@ class Bonus:
             nodes[i].compute_team_level()
             # 计算节点等级
             nodes[i].compute_level()
+            self.print_detail("[BONUS] address: {}, level: {}".format(nodes[i].address, nodes[i].level))
+
             # 计算旗下当前等级的星级数量，区分路线
             nodes[i].compute_team_cur_level_count()
             # 团队业绩分红
             if nodes[i].can_bonus(bonus_time):
-                burned, small_area_burned, nodes[i].team_bonus = self.compute_team_bonus(nodes[i])
+                burned, small_area_burned, nodes[i].team_bonus = self.compute_team_bonus(nodes[i], bonus_time)
                 nodes[i].burned = 1 if burned else 0
                 nodes[i].small_area_burned = 1 if small_area_burned else 0
 
@@ -107,7 +114,7 @@ class Bonus:
             bonus += 0.2*self.compute_locked_bonus(child.locked_amount, child.days)
         return round(bonus, 3)
 
-    def compute_team_bonus(self, node):
+    def compute_team_bonus(self, node, bonus_time):
         '''计算团队分红, 保留三位小数'''
         if node.level < 5:
             return False, False, 0
@@ -126,16 +133,21 @@ class Bonus:
 
         burned = False
         for k in info:
+            self.print_detail("[BONUS] address: {}, bonustime: {}, team_bonus area static: {} = {}".format(node.address,
+                              bonus_time, k, info[k]))
             if k in ['high_level', 'equal_level', 'low_one'] and info[k] > 0:
                 burned = True
+
+            b = info[k] * (1 - self.bonus_conf['level_burned_bonus'][k])
             if small_area_burned and k == 'normal':
-                b = info[k] * (1-self.bonus_conf['level_burned_bonus'][k])
-                if small_area_burned:
-                    b = b*(1-self.bonus_conf['small_area_burned_bonus'])
-                team_bonus += b
-            else:
-                team_bonus += info[k] * (1-self.bonus_conf['level_burned_bonus'][k])
-        return burned, small_area_burned, round(team_bonus*self.bonus_conf['team_bonus_rate'][node.level], 3)
+                b = b * (1 - self.bonus_conf['small_area_burned_bonus'])
+            self.print_detail("[BONUS] address: {}, bonustime: {}, team_bonus: {} = {}".format(node.address,
+                             bonus_time, k, b))
+            team_bonus += b
+        team_bonus = round(team_bonus*self.bonus_conf['team_bonus_rate'][node.level], 3)
+        self.print_detail("[BONUS] address: {}, bonustime: {}, team_bonus: {}".format(node.address, bonus_time, team_bonus))
+
+        return burned, small_area_burned, team_bonus
 
     def check_next_layer(self, is_max_layer):
         '''检测是否需要先找出下一层级节点，防止程序异常退出再次运行，下一层级节点数据丢失'''
