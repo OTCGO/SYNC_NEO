@@ -19,8 +19,8 @@ from message import MSG
 
 
 SEAC = 'f735eb717f2f31dfc8d12d9df379da9b198b2045'
-#RECEIVE = 'AU6WPAYiTFtay8QJqsYVGhZ6gbBwnKPxkf'
-RECEIVE = 'AewNjj9is8VEHAZSXJfKk7FbsrWCJQvwZc' #test
+RECEIVE = 'AewNjj9is8VEHAZSXJfKk7FbsrWCJQvwZc'
+RECEIVE_PUK = '0225546ccf3343190d6f78d63ebd7fd04731dad18a11c1967f593098789aa31fae'
 AMOUNTS = ['1000', '3000', '5000', '10000']
 DAYS = ['30', '90', '180', '360']
 OPERATION_REACTIVE_NODE = 5
@@ -141,6 +141,18 @@ async def mysql_get_node_status(pool, address):
                 'teamcurlevelcount':r[0][13],
                 }
     return None
+
+async def mysql_get_node_referrals(pool, address, info=None):
+    sql = "SELECT address,amount,days,nodelevel,status FROM node WHERE referrer='%s';" % address
+    r = await mysql_query_one(pool, sql)
+    x = {'info':info,'referrals':[]}
+    if r:
+        for i in r:
+            if i[0] == address:
+                x['info'] = [i[0],i[1],i[2],i[3],i[4]]
+            else:
+                x['referrals'].append(await mysql_get_node_referrals(pool, i[0], [i[0],i[1],i[2],i[3],i[4]]))
+    return x
 
 async def mysql_query_node_exist(pool, address):
     sql = "SELECT address FROM node WHERE address='%s';" % address
@@ -277,6 +289,13 @@ async def mysql_node_update_new_node(pool, address, referrer, amount, days, txid
     if n: return True
     return False
 
+async def mysql_node_update_history_new_record(pool, address, referrer, amount, days, txid, operation):
+    timepoint = get_now_timepoint()
+    sql = "INSERT INTO node_update_history(address,operation,referrer,amount,days,txid,timepoint) VALUES ('%s',%s,'%s','%s',%s,'%s',%s)" % (address,operation,referrer,amount,days,txid,timepoint)
+    n = await mysql_insert_one(pool, sql)
+    if n: return True
+    return False
+
 async def mysql_node_update_unlock(pool, address):
     timepoint = get_now_timepoint()
     sql = "INSERT INTO node_update(address,operation,timepoint) VALUES ('%s',2,%s)" % (address,timepoint)
@@ -301,9 +320,9 @@ def get_withdraw_fee(amount,fee_rate):
     if fee < MIN_WITHDRAW_FEE: fee = MIN_WITHDRAW_FEE
     return fee
 
-async def mysql_get_node_withdraw_count(pool, address):
-    sql = "SELECT count(id) FROM node_withdraw where address='%s' and status=0;" % address
-    n = await mysql_insert_one(pool, sql)
+async def mysql_get_node_withdraw_status_0(pool, address):
+    sql = "SELECT id,timepoint FROM node_withdraw where address='%s' and status=0;" % address
+    n = await mysql_query_one(pool, sql)
     return n
 
 async def mysql_node_update_signin(pool, address):
@@ -358,6 +377,12 @@ async def node_status(net, address, request):
         else: s['static_remain_cny'] = '0'
         s['static_remain'] = str(static_remain)
         request['result']['data'] = s
+
+@format_result(['net','address'])
+@get('/v2/{net}/node/relationship/{address}')
+async def node_relationship(net, address, request):
+    pool = request.app['pool']
+    request['result']['data'] = await mysql_get_node_referrals(pool,address)
 
 @format_result(['net'])
 @post('/v2/{net}/node/new')
@@ -427,6 +452,7 @@ async def node_broadcast(net, request, *, publicKey, signature, transaction):
         await delete_node_info_from_cache(request, address)
         r= await mysql_node_update_new_node(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], info['operation'])
         if not r:
+            await mysql_node_update_history_new_record(pool, address, info['referrer'], info['amount'], info['days'], info['txid'], 0)
             request['result'].update(MSG['NODE_WAIT_PROCESS'])
             request['result']['message'] += ':' + msg
             return 
@@ -496,19 +522,19 @@ async def node_history_bonus(net, address, request, *, index=0, length=100):
 @post('/v2/{net}/node/withdraw')
 async def node_withdraw(net, request, *, publicKey, signature, message):
     if not valid_msg(message): request['result'].update(MSG['WRONG_ARGUMENT_MESSAGE']);return
-    result,_ = Tool.verify(publicKey, signature, message)
-    if not result: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
-    address = Tool.cpubkey_to_address(publicKey)
+    va ,_ = Tool.verify(RECEIVE_PUK, signature, message)
+    vb ,_ = Tool.verify(publicKey, signature, message)
+    if va: address = publicKey
+    elif vb: address = Tool.cpubkey_to_address(publicKey)
+    else: request['result'].update(MSG['WRONG_ARGUMENT_SIGNATURE']);return
     if await cache_node_exist(request, address): request['result'].update(MSG['NODE_CREATING']);return
     pool = request.app['pool']
-    result = await mysql_node_signature_add(pool, address, signature)
-    if not result: request['result'].update(MSG['SIGNATURE_ALREADY_EXIST']);return
     aeu = await mysql_query_node_update_exist(pool, address)
     if aeu: request['result'].update(MSG[aeu]);return
     amount = get_max_withdraw_amount(await mysql_get_node_bonus_remain(pool, address))
     if amount is None: request['result'].update(MSG['TOO_LESS_TO_WITHDRAW']);return
-    n = await mysql_get_node_withdraw_count(pool, address)
-    if 0 == n: request['result'].update(MSG['WAIT_LAST_WITHDRAW_FINISH']);return
+    n = await mysql_get_node_withdraw_status_0(pool, address)
+    if n: request['result'].update(MSG['WAIT_LAST_WITHDRAW_FINISH']);return
     result  = await mysql_node_update_withdraw(pool, address, amount)
     if not result:
         request['result'].update(MSG['WITHDRAW_FAILURE']);return

@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS node_used_txid (
 CREATE TABLE IF NOT EXISTS node_update_history (
   id INT UNSIGNED AUTO_INCREMENT,
   address VARCHAR(34) NOT NULL,
-  operation TINYINT UNSIGNED NOT NULL, #1请求新节点 2请求解锁 3请求提取 4请求签到 5请求旧节点激活 6到期退出 7解锁成功
+  operation TINYINT UNSIGNED NOT NULL, #0新节点广播成功未录入表 #1请求新节点 2请求解锁 3请求提取 4请求签到 5请求旧节点激活 6到期退出 7解锁成功
   referrer VARCHAR(34) DEFAULT '' NOT NULL,
   amount VARCHAR(40) DEFAULT '0' NOT NULL,
   days SMALLINT UNSIGNED DEFAULT 0 NOT NULL,

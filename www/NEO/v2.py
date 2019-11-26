@@ -240,13 +240,13 @@ async def mysql_get_utxo(pool, address, asset):
 
 async def mysql_insert_one(pool, sql):
     conn, cur = await get_mysql_cursor(pool)
-    logging.info('SQL:%s' % sql)
+    #logging.info('SQL:%s' % sql)
     try:
         await cur.execute(sql)
         num = cur.rowcount
         return num
     except Exception as e:
-        logger.error("mysql INSERT failure:{}".format(e.args[0]))
+        logging.error("mysql INSERT failure:{}".format(e.args[0]))
         sys.exit(1)
     finally:
         await pool.release(conn)

@@ -97,7 +97,7 @@ class OEP4History(Crawler):
                                 decimals = o4.decimals()
                                 name = o4.name().strip()
                                 symbol = o4.symbol().strip()
-                                if decimals >= 0 and len(symbol) >= 2 and len(name) >= 2:
+                                if 255>= decimals >= 0 and len(symbol) >= 2 and len(name) >= 2:
                                     await self.mysql_new_oep4(asset, decimals, symbol, name)
                                     self.cache_decimals[asset] = decimals #update cache_decimals
                             except SDKException:

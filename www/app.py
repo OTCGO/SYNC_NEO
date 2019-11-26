@@ -306,7 +306,7 @@ async def init(loop):
                     'max_instances': 1,
         })
     scheduler.add_job(update_height, 'interval', seconds=2, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
-    #scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
+    scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
     scheduler.add_job(update_assets, 'interval', seconds=120, args=[app['pool'], app['cache']], id='update_assets', timezone=utc)
     scheduler.add_job(update_seas_price, 'interval', seconds=20, args=[app['pool'], app['cache']], id='update_seas_price', timezone=utc)
     scheduler._logger = logging
