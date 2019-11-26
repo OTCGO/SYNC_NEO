@@ -10,6 +10,7 @@ import aiohttp
 import aiomysql
 from cacheout import Cache
 import os
+import sys
 import json
 import time
 from pytz import utc
@@ -206,7 +207,7 @@ async def update_seas_price(pool, cache):
 async def init_cache(app):
     await update_height(app['pool'], app['cache'])
     await update_assets(app['pool'], app['cache'])
-    await update_seas_price(app['pool'], app['cache'])
+    #await update_seas_price(app['pool'], app['cache'])
 
 async def logger_factory(app, handler):
     async def logger(request):
@@ -308,7 +309,7 @@ async def init(loop):
     scheduler.add_job(update_height, 'interval', seconds=2, args=[app['pool'], app['cache']], id='update_height', timezone=utc)
     scheduler.add_job(update_neo_uri, 'interval', seconds=20, args=[app], id='update_neo_uri', timezone=utc)
     scheduler.add_job(update_assets, 'interval', seconds=120, args=[app['pool'], app['cache']], id='update_assets', timezone=utc)
-    scheduler.add_job(update_seas_price, 'interval', seconds=20, args=[app['pool'], app['cache']], id='update_seas_price', timezone=utc)
+    #scheduler.add_job(update_seas_price, 'interval', seconds=20, args=[app['pool'], app['cache']], id='update_seas_price', timezone=utc)
     scheduler._logger = logging
     scheduler.start()
     add_routes(app, 'handlers')

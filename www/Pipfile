@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 aiohttp = "*"
 uvloop = "*"
-pycoin = "*"
 "base58" = "*"
 bitcoin = "*"
 ecdsa = "*"
@@ -14,6 +13,7 @@ python-dotenv = "*"
 apscheduler = "*"
 aiomysql = "*"
 cacheout = "*"
+pycoin = "==0.80"
 
 [dev-packages]
 ipython = "*"
