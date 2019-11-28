@@ -125,6 +125,7 @@ class OEP4History(Crawler):
                                 dest = CT.scripthash_to_address(dest)
                                 value = CT.hex_to_biginteger(value)
                                 value = CT.sci_to_str(str(D(value)/D(math.pow(10,self.cache_decimals[asset]))))
+                            if False in map(CT.validate_address, [address,dest]): break
                             index = index + 1
                             index_n = index
                             his.append([txid, 'out', index_n, address, value, dest,    timepoint, asset])
@@ -156,6 +157,6 @@ if __name__ == "__main__":
     try:
         loop.run_until_complete(h.crawl())
     except Exception as e:
-        logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
+        logger.error('LOOP EXCEPTION: {}'.format(e))
     finally:
         loop.close()

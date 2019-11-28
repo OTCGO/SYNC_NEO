@@ -113,6 +113,6 @@ if __name__ == "__main__":
     try:
         loop.run_until_complete(u.crawl())
     except Exception as e:
-        logger.error('LOOP EXCEPTION: {}'.format(e.args[0]))
+        logger.error('LOOP EXCEPTION: {}'.format(e))
     finally:
         loop.close()

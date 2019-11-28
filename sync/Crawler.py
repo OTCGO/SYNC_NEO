@@ -353,14 +353,15 @@ class Crawler:
 
     async def mysql_insert_one(self, sql):
         conn, cur = await self.get_mysql_cursor()
-        logger.info('SQL:%s' % sql)
+        #logger.info('SQL:%s' % sql)
         try:
             await cur.execute(sql)
             num = cur.rowcount
             #logger.info('%s row affected' % num)
             return num
         except Exception as e:
-            logger.error("mysql INSERT failure:{}".format(e.args[0]))
+            logger.info('SQL:%s' % sql)
+            logger.error("mysql INSERT failure:{}".format(e))
             sys.exit(1)
         finally:
             await self.pool.release(conn)

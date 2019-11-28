@@ -7,7 +7,7 @@ import time
 import hashlib
 import datetime
 from binascii import unhexlify
-from base58 import b58encode
+from base58 import b58encode, b58decode
 
 
 class CommonTool:
@@ -48,6 +48,14 @@ class CommonTool:
     @staticmethod
     def hash256(b):
         return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+    @classmethod
+    def validate_address(cls, address):
+        if len(address) not in [33,34]: return False
+        if 'A' != address[0]: return False
+        tmp = b58decode(address)
+        x,check = tmp[:-4],tmp[-4:]
+        return cls.hash256(x)[:4] == check
 
     @classmethod
     def scripthash_to_address(cls, sh):
