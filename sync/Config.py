@@ -31,10 +31,10 @@ class Config:
 
     @staticmethod
     def get_neo_uri():
+        protocol = os.environ.get('NODEPROTOCOL')
         neo_node = os.environ.get('NEONODE')
         neo_port = os.environ.get('NEOPORT')
-        if '443' == neo_port: return 'https://%s:%s' % (neo_node, neo_port)
-        return 'http://%s:%s' % (neo_node, neo_port)
+        return '%s://%s:%s' % (protocol,neo_node, neo_port)
 
     @staticmethod
     def get_ont_uri():

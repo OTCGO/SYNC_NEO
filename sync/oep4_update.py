@@ -95,7 +95,10 @@ class OEP4UPT(Crawler):
             current_height = await self.get_block_count()
             upts = await self.get_address_info_to_update(current_height)
             if upts:
-                result = await asyncio.gather(*[self.get_balance(*upt) for upt in upts]) 
+                result = []
+                for upt in upts:
+                    result.append(await self.get_balance(*upt))
+                #result = await asyncio.gather(*[self.get_balance(*upt) for upt in upts]) 
                 data = []
                 for i in range(len(upts)):
                     upt = upts[i]

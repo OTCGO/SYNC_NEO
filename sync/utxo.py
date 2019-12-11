@@ -52,7 +52,7 @@ class UTXO(Crawler):
             if result:
                 addr = result[0]
                 asset = result[1]
-                logger.info('from utxos get address:%s, asset:%s' % (addr,asset))
+                #logger.info('from utxos get address:%s, asset:%s' % (addr,asset))
                 return addr,asset
             logger.error('Unable to get utxos {}'.format(vin['txid']))
             sys.exit(1)

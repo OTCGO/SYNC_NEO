@@ -63,6 +63,7 @@ async def get_ont_balance(request, address, asset_name=None):
     result,err = await get_rpc_ont(request, 'getbalance', [address])
     if err or not result: return {'ont':"0",'ong':"0"}
     for i in result:
+        if i == 'height': continue
         if assets[i]['decimal'] > 0:
             result[i] = sci_to_str(str(D(result[i])/D(math.pow(10, assets[i]['decimal']))))
     if not asset_name: return result
